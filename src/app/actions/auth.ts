@@ -5,14 +5,14 @@ import { DEMO_PASSWORD } from "@/lib/engine/demo";
 import { isDemoMode } from "@/lib/supabase/env";
 import { userDb } from "@/lib/supabase/server";
 
+/** Only admins sign in. Anyone else is signed straight back out. */
 async function finishSignIn(): Promise<string | null> {
   const db = await userDb();
-  const { data } = await db.auth.getClaims();
-  const uid = data?.claims?.sub;
-  const { data: profile } = uid ? await db.from("profiles").select("active").eq("id", uid).maybeSingle() : { data: null };
-  if (!profile?.active) {
+  const { data: profileId } = await db.rpc("current_profile_id");
+  const { data: profile } = profileId ? await db.from("profiles").select("is_admin, active").eq("id", profileId).maybeSingle() : { data: null };
+  if (!profile?.active || !profile.is_admin) {
     await db.auth.signOut();
-    return "Your account isn't set up for the walkathon yet. Ask your admin to add you.";
+    return "Only walkathon admins sign in. Everyone else can view the site without an account.";
   }
   return null;
 }
@@ -26,10 +26,10 @@ export async function signIn(_prev: { error: string } | null, formData: FormData
   }
   const db = await userDb();
   const { error } = await db.auth.signInWithPassword({ email, password });
-  if (error) return { error: "That email and password don't match. Ask your walkathon admin if you need a new password." };
+  if (error) return { error: "That email and password don't match. Another admin can reset your password." };
   const problem = await finishSignIn();
   if (problem) return { error: problem };
-  redirect("/");
+  redirect("/admin");
 }
 
 export async function demoSignIn(formData: FormData): Promise<void> {
@@ -37,7 +37,7 @@ export async function demoSignIn(formData: FormData): Promise<void> {
   const db = await userDb();
   const { error } = await db.auth.signInWithPassword({ email: String(formData.get("email") ?? ""), password: DEMO_PASSWORD });
   if (error || (await finishSignIn())) redirect("/login");
-  redirect("/");
+  redirect("/admin");
 }
 
 /** Clears the session. The caller then does a full page load of /login, so nothing from the old session is reused. */

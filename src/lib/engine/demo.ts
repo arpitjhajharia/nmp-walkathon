@@ -96,7 +96,7 @@ export function buildDemoData(today: ISODate): DemoData {
         leaves.push({ userId: m.id, date: d });
         return;
       }
-      if (rand() < 0.012) return; // occasionally a lead forgets: a genuine gap, never auto-filled
+      if (rand() < 0.012) return; // occasionally a day is never entered: a genuine gap, never auto-filled
       let steps = (base + trend * di) * (weekday(d) >= 5 ? weekendFactor : 1) * (1 + gauss() * 0.26);
       if (rand() < bigDayChance) steps += 9000 + rand() * 9000;
       if (rand() < 0.05) steps *= 0.45; // a rainy, desk-bound day

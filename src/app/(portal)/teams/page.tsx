@@ -2,13 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { TeamIcon } from "@/components/team";
 import { Card, PageHeader } from "@/components/ui";
-import { requireUser } from "@/lib/server/auth";
 import { getPortal } from "@/lib/server/season";
 
 export const metadata: Metadata = { title: "Teams" };
 
 export default async function TeamsPage() {
-  const user = await requireUser();
   const { season: s, nameOf } = await getPortal();
   return (
     <>
@@ -26,9 +24,8 @@ export default async function TeamsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="font-display text-2xl font-bold uppercase leading-tight">
                       {t.name}
-                      {user.teamId === t.id && <span className="ml-2 align-middle text-xs font-semibold normal-case text-muted">Your team</span>}
                     </p>
-                    <p className="text-sm text-muted">Lead: {t.leadUserId ? nameOf(t.leadUserId) : "Not assigned"}</p>
+                    <p className="text-sm text-muted">Captain: {t.leadUserId ? nameOf(t.leadUserId) : "Not chosen yet"}</p>
                   </div>
                   <div className="text-right">
                     <p className="tnum font-display text-3xl font-bold leading-none">#{row.position}</p>

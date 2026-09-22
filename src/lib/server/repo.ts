@@ -7,13 +7,19 @@ import { DEFAULT_SETTINGS } from "../engine/defaults.ts";
 import { computeSeason, type Season } from "../engine/engine.ts";
 import type { ChallengeType, Membership, Settings, Snapshot, Team } from "../engine/types.ts";
 
+/** A person in the competition. Emails aren't public; admins load them with loadContacts. */
 export interface UserRecord {
   id: string;
   name: string;
-  email: string;
   isAdmin: boolean;
   active: boolean;
   teamId: string | null;
+}
+
+export interface Contact {
+  id: string;
+  email: string;
+  authUserId: string | null;
 }
 
 export interface SeasonRow {
@@ -96,14 +102,20 @@ export async function loadTeams(db: SupabaseClient, seasonId: string): Promise<T
 
 export async function loadUsers(db: SupabaseClient, seasonId: string): Promise<UserRecord[]> {
   const [profiles, members] = await Promise.all([
-    fetchAll<{ id: string; name: string; email: string; is_admin: boolean; active: boolean }>(
-      (a, b) => db.from("profiles").select("id, name, email, is_admin, active").order("name").range(a, b),
+    fetchAll<{ id: string; name: string; is_admin: boolean; active: boolean }>(
+      (a, b) => db.from("profiles").select("id, name, is_admin, active").order("name").range(a, b),
       "Loading people",
     ),
     fetchAll<{ user_id: string; team_id: string }>((a, b) => db.from("team_members").select("user_id, team_id").eq("season_id", seasonId).order("user_id").range(a, b)),
   ]);
   const teamOf = new Map(members.map((m) => [m.user_id, m.team_id]));
-  return profiles.map((p) => ({ id: p.id, name: p.name, email: p.email, isAdmin: p.is_admin, active: p.active, teamId: teamOf.get(p.id) ?? null }));
+  return profiles.map((p) => ({ id: p.id, name: p.name, isAdmin: p.is_admin, active: p.active, teamId: teamOf.get(p.id) ?? null }));
+}
+
+/** Emails and sign-in links. The database returns these only to admins. */
+export async function loadContacts(db: SupabaseClient): Promise<Map<string, Contact>> {
+  const rows = must(await db.rpc("member_contacts"), "Loading contacts") as { id: string; email: string; auth_user_id: string | null }[];
+  return new Map(rows.map((r) => [r.id, { id: r.id, email: r.email, authUserId: r.auth_user_id }]));
 }
 
 export async function loadData(db: SupabaseClient, season: SeasonRow): Promise<LoadedData> {

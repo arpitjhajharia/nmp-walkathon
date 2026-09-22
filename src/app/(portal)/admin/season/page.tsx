@@ -72,21 +72,14 @@ export default async function SeasonSettings({ searchParams }: PageProps<"/admin
         </section>
 
         <section>
-          <SectionTitle title="Entry & locking" />
+          <SectionTitle title="Entry" />
           <Card className="grid gap-4 p-5 sm:grid-cols-2">
-            <Field label="Correction window (days)" htmlFor="correctionDays" hint="1 = leads can edit until 11:59 PM the next day.">
+            <Field label="Results provisional for (days)" htmlFor="correctionDays" hint="After a week ends, its result is marked provisional for this many days while corrections come in.">
               <input id="correctionDays" name="correctionDays" type="number" min={0} max={14} defaultValue={s.correctionDays} required className={inputCls} />
             </Field>
-            <Field label="High-value warning (steps)" htmlFor="highValueWarning" hint="Leads see a warning above this, but can still save.">
+            <Field label="High-value warning (steps)" htmlFor="highValueWarning" hint="Values above this need a second confirmation when saving.">
               <input id="highValueWarning" name="highValueWarning" type="number" min={1000} defaultValue={s.highValueWarning} required className={inputCls} />
             </Field>
-            <label className="flex items-start gap-3 sm:col-span-2">
-              <input type="checkbox" name="lockOlderDates" defaultChecked={s.lockOlderDates} className="mt-1 size-4.5 accent-night" />
-              <span className="text-sm">
-                <span className="font-semibold">Lock dates after the correction window</span>
-                <span className="block text-muted">Admins can still unlock individual dates from Data &amp; corrections.</span>
-              </span>
-            </label>
           </Card>
         </section>
 

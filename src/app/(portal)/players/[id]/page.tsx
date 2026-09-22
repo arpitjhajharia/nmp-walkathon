@@ -5,24 +5,27 @@ import { TeamBadge } from "@/components/team";
 import { Card, Chip, EmptyState, PageHeader, Pips, Progress, SectionTitle, Stat, fmt } from "@/components/ui";
 import { formatDay, formatShort } from "@/lib/engine/dates";
 import { BADGES, nextBand, sortedBands } from "@/lib/engine/engine";
-import { requireUser } from "@/lib/server/auth";
+import { notFound } from "next/navigation";
 import { getPortal } from "@/lib/server/season";
 
-export const metadata: Metadata = { title: "My progress" };
+export async function generateMetadata({ params }: PageProps<"/players/[id]">): Promise<Metadata> {
+  const { id } = await params;
+  return { title: (await getPortal()).users.get(id)?.name ?? "Player" };
+}
 
-export default async function MePage() {
-  const user = await requireUser();
-  const { season: s } = await getPortal();
-  const st = s.stats.get(user.id);
-  const team = s.teams.find((t) => t.id === user.teamId);
+export default async function PlayerPage({ params }: PageProps<"/players/[id]">) {
+  const { id } = await params;
+  const { season: s, users } = await getPortal();
+  const person = users.get(id);
+  if (!person) notFound();
+  const st = s.stats.get(id);
+  const team = s.teams.find((t) => t.id === person.teamId);
 
   if (!st || !team) {
     return (
       <>
-        <PageHeader eyebrow={user.name} title="My progress" />
-        <EmptyState title="You're not on a team this season">
-          {user.isAdmin ? "As an admin you can still see everything. Add yourself to a team from Admin → Teams to take part." : "Ask your walkathon admin to add you to a team."}
-        </EmptyState>
+        <PageHeader eyebrow="Player" title={person.name} />
+        <EmptyState title="Not on a team this season" />
       </>
     );
   }
@@ -31,22 +34,21 @@ export default async function MePage() {
   const today = st.today;
   const nb = today.steps !== null ? nextBand(today.steps, bands) : null;
   const days = s.countedDates.slice(-30);
-  const values = days.map((d) => s.memberDay(user.id, d));
+  const values = days.map((d) => s.memberDay(id, d));
   const top = Math.max(14000, ...values.map((v) => v.steps ?? 0));
   const W = 600,
     H = 180,
     barW = W / Math.max(days.length, 1);
   const y = (v: number) => H - (Math.min(v, top) / top) * H;
   const challenge = s.currentWeek ? s.challenges.find((c) => c.weekIndex === s.currentWeek!.index) : undefined;
-  const myChallenge = challenge?.progress.find((p) => p.userId === user.id);
+  const myChallenge = challenge?.progress.find((p) => p.userId === id);
   const earned = st.badges.filter((b) => b.unlockedOn);
   const locked = st.badges.filter((b) => !b.unlockedOn);
 
   return (
     <>
-      <PageHeader eyebrow="My progress" title={user.name.split(" ")[0]}>
+      <PageHeader eyebrow="Player" title={person.name}>
         <TeamBadge team={team} size="sm" link />
-        <span className="mt-1 block">Your steps help {team.name} every day.</span>
       </PageHeader>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -55,7 +57,7 @@ export default async function MePage() {
           {today.leave ? (
             <p className="mt-2 font-display text-3xl font-bold uppercase">On leave</p>
           ) : today.steps === null ? (
-            <p className="mt-2 text-white/80">Not entered yet. Your team lead adds today&apos;s steps.</p>
+            <p className="mt-2 text-white/80">Not entered yet today.</p>
           ) : (
             <>
               <p className="tnum mt-1 font-display text-5xl font-bold">{fmt(today.steps)}</p>
@@ -66,7 +68,7 @@ export default async function MePage() {
                 </span>
               </div>
               <p className="mt-3 text-sm text-accent">
-                {nb ? `${fmt(nb.gap)} more steps would earn ${nb.points - today.points} extra point${nb.points - today.points === 1 ? "" : "s"}.` : "Top band reached: full points for your team."}
+                {nb ? `${fmt(nb.gap)} more steps would earn ${nb.points - today.points} extra point${nb.points - today.points === 1 ? "" : "s"}.` : `Top band reached: full points for ${team.name}.`}
               </p>
             </>
           )}
@@ -98,7 +100,7 @@ export default async function MePage() {
         <SectionTitle title="Last 30 days" sub="Dashed lines mark the point bands." />
         <Card className="p-4 sm:p-5">
           {days.length === 0 ? (
-            <p className="text-sm text-muted">Your chart appears once the season starts.</p>
+            <p className="text-sm text-muted">The chart appears once the season starts.</p>
           ) : (
             <>
               <svg viewBox={`0 0 ${W + 44} ${H + 22}`} className="h-auto w-full" role="img" aria-label={`Daily steps for the last ${days.length} days`}>

@@ -8,14 +8,10 @@ import { generateFixtures, pointsFor, seasonWeeks } from "../engine/engine.ts";
 import type { ChallengeType, Settings, Team } from "../engine/types.ts";
 import { createAdminClient, hasServiceKey } from "../supabase/admin.ts";
 import { userDb } from "../supabase/server";
-import { activeSeason, fetchAll, loadTeams, loadUsers, must, recomputeWith, settingsOf, todayFor, type SeasonRow, type UserRecord } from "./repo.ts";
+import { activeSeason, fetchAll, loadContacts, loadTeams, loadUsers, must, recomputeWith, settingsOf, todayFor, type Contact, type SeasonRow, type UserRecord } from "./repo.ts";
 
-export type { UserRecord } from "./repo.ts";
+export type { Contact, UserRecord } from "./repo.ts";
 export { todayFor } from "./repo.ts";
-
-export interface SessionUser extends UserRecord {
-  leadTeamId: string | null;
-}
 
 // ───────────────────────── Reads ─────────────────────────
 
@@ -99,32 +95,15 @@ async function effectiveDate(): Promise<ISODate> {
   return today > s.startDate ? today : s.startDate;
 }
 
-// ───────────────────────── Edit permissions (for friendly messages; the database enforces) ─────────────────────────
+// ───────────────────────── Editable dates (for friendly messages; the database enforces) ─────────────────────────
 
-export interface EditPermission {
-  editable: boolean;
-  reason: string;
-  unlockedByAdmin: boolean;
-  canRequest: boolean;
-}
-
-export async function editPermission(user: SessionUser, teamId: string, date: ISODate): Promise<EditPermission> {
+/** Admins can enter any day of the season up to today. Returns a reason when they can't. */
+export async function dateProblem(date: ISODate): Promise<string | null> {
   const s = await getSettings();
-  const today = todayFor(s.timezone);
   const end = addDays(s.startDate, s.lengthDays - 1);
-  const no = (reason: string, canRequest = false): EditPermission => ({ editable: false, reason, unlockedByAdmin: false, canRequest });
-  if (date < s.startDate || date > end) return no("This date is outside the competition.");
-  if (date > today) return no("Future dates open on the day.");
-  if (user.isAdmin) return { editable: true, reason: "Admins can edit any date.", unlockedByAdmin: false, canRequest: false };
-  if (user.leadTeamId !== teamId) return no("Only this team's lead can enter steps.");
-  if (!s.lockOlderDates || diffDays(date, today) <= s.correctionDays) return { editable: true, reason: "", unlockedByAdmin: false, canRequest: false };
-  const db = await userDb();
-  const unlocked = must(
-    await db.from("unlocked_dates").select("date").eq("season_id", (await currentSeason()).id).eq("date", date).in("team_id", [teamId, "*"]),
-    "Checking locks",
-  ) as unknown[];
-  if (unlocked.length) return { editable: true, reason: "Unlocked by an admin for corrections.", unlockedByAdmin: true, canRequest: false };
-  return no("This date is locked. You can ask an admin to unlock it.", true);
+  if (date < s.startDate || date > end) return "This date is outside the competition.";
+  if (date > todayFor(s.timezone)) return "Future dates open on the day.";
+  return null;
 }
 
 // ───────────────────────── Daily entry ─────────────────────────
@@ -142,63 +121,7 @@ export async function saveDay(teamId: string, date: ISODate, rows: DayRowInput[]
   return { changed };
 }
 
-// ───────────────────────── Locks & corrections ─────────────────────────
-
-export async function unlockedDates(): Promise<{ date: string; teamId: string; unlockedBy: string | null; unlockedAt: string }[]> {
-  const db = await userDb();
-  const rows = must(
-    await db.from("unlocked_dates").select("date, team_id, unlocked_by, unlocked_at").eq("season_id", (await currentSeason()).id).order("date", { ascending: false }),
-    "Loading unlocked dates",
-  ) as { date: string; team_id: string; unlocked_by: string | null; unlocked_at: string }[];
-  return rows.map((r) => ({ date: r.date, teamId: r.team_id, unlockedBy: r.unlocked_by, unlockedAt: r.unlocked_at }));
-}
-
-export async function setDateUnlocked(actorId: string, date: ISODate, teamId: string, unlocked: boolean): Promise<void> {
-  const db = await userDb();
-  const sid = (await currentSeason()).id;
-  if (unlocked) must(await db.from("unlocked_dates").upsert({ season_id: sid, date, team_id: teamId, unlocked_by: actorId }), "Unlocking");
-  else must(await db.from("unlocked_dates").delete().eq("season_id", sid).eq("date", date).eq("team_id", teamId), "Locking");
-  await audit(unlocked ? "unlock" : "lock", "date_lock", `${date}|${teamId}`, null, null);
-}
-
-export interface CorrectionRequest {
-  id: string;
-  teamId: string;
-  date: string;
-  reason: string;
-  requestedBy: string;
-  status: "pending" | "approved" | "declined";
-  decidedBy: string | null;
-  decidedAt: string | null;
-  createdAt: string;
-}
-
-export async function correctionRequests(status?: string): Promise<CorrectionRequest[]> {
-  const db = await userDb();
-  let q = db
-    .from("correction_requests")
-    .select("id, team_id, date, reason, requested_by, status, decided_by, decided_at, created_at")
-    .eq("season_id", (await currentSeason()).id)
-    .order("created_at", { ascending: false });
-  if (status) q = q.eq("status", status);
-  const rows = must(await q, "Loading correction requests") as {
-    id: string; team_id: string; date: string; reason: string; requested_by: string; status: CorrectionRequest["status"]; decided_by: string | null; decided_at: string | null; created_at: string;
-  }[];
-  return rows.map((r) => ({ id: r.id, teamId: r.team_id, date: r.date, reason: r.reason, requestedBy: r.requested_by, status: r.status, decidedBy: r.decided_by, decidedAt: r.decided_at, createdAt: r.created_at }));
-}
-
-export async function requestCorrection(actor: SessionUser, teamId: string, date: ISODate, reason: string): Promise<void> {
-  const db = await userDb();
-  const row = must(
-    await db.from("correction_requests").insert({ season_id: (await currentSeason()).id, team_id: teamId, date, reason, requested_by: actor.id }).select("id").single(),
-    "Sending the request",
-  ) as { id: string };
-  await audit("request", "correction_request", row.id, null, { teamId, date, reason });
-}
-
-export async function decideCorrection(id: string, approve: boolean): Promise<void> {
-  await rpc("decide_correction", { p_id: id, p_approve: approve });
-}
+// ───────────────────────── Leave ─────────────────────────
 
 export async function leaveRecords(limit = 25): Promise<{ userId: string; date: string; createdBy: string | null; createdAt: string }[]> {
   const db = await userDb();
@@ -299,49 +222,85 @@ export function temporaryPassword(): string {
   return `${words[randomBytes(1)[0] % words.length]}-${randomBytes(4).toString("hex")}`;
 }
 
-export async function addMember(input: { name: string; email: string; teamId: string | null; isAdmin: boolean }): Promise<{ password: string }> {
+/** Emails and sign-in links for everyone (admins only; the database returns nothing otherwise). */
+export const listContacts = cache(async (): Promise<Map<string, Contact>> => loadContacts(await userDb()));
+
+/** Create a sign-in account for an admin and link it. Returns the temporary password. */
+async function createLogin(profileId: string, email: string, name: string): Promise<string> {
   const password = temporaryPassword();
   const admin = createAdminClient();
-  const { data, error } = await admin.auth.admin.createUser({ email: input.email, password, email_confirm: true, user_metadata: { name: input.name } });
-  if (error || !data.user) throw new Error(error?.message ?? "Could not create the account.");
-  const id = data.user.id;
+  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name } });
+  if (error || !data.user) throw new Error(error?.message ?? "Could not create the sign-in account.");
   const db = await userDb();
-  const created = await db.from("profiles").insert({ id, name: input.name, email: input.email, is_admin: input.isAdmin, active: true });
-  if (created.error) {
-    await admin.auth.admin.deleteUser(id);
-    throw new Error(created.error.message);
+  const linked = await db.from("profiles").update({ auth_user_id: data.user.id }).eq("id", profileId).select("id");
+  if (linked.error || linked.data?.length !== 1) {
+    await admin.auth.admin.deleteUser(data.user.id);
+    throw new Error(linked.error?.message ?? "Only admins can grant admin access.");
   }
-  if (input.teamId) await rpc("set_member_team", { p_season: (await currentSeason()).id, p_user: id, p_team: input.teamId, p_effective: await effectiveDate() });
-  await audit("create", "user", id, null, input);
+  return password;
+}
+
+/** Add a person. Only admins get a sign-in account (and a temporary password). */
+export async function addMember(input: { name: string; email: string; teamId: string | null; isAdmin: boolean }): Promise<{ password: string | null }> {
+  const db = await userDb();
+  const row = must(
+    await db.from("profiles").insert({ name: input.name, email: input.email, is_admin: input.isAdmin, active: true }).select("id").single(),
+    "Adding the member",
+  ) as { id: string };
+  if (input.teamId) await rpc("set_member_team", { p_season: (await currentSeason()).id, p_user: row.id, p_team: input.teamId, p_effective: await effectiveDate() });
+  const password = input.isAdmin ? await createLogin(row.id, input.email, input.name) : null;
+  await audit("create", "user", row.id, null, input);
   await recompute();
   return { password };
 }
 
-export async function updateMember(userId: string, patch: { name: string; email: string; teamId: string | null; isAdmin: boolean; active: boolean }): Promise<void> {
+export async function updateMember(userId: string, patch: { name: string; email: string; teamId: string | null; active: boolean }): Promise<void> {
   const before = await findUser(userId);
   if (!before) throw new Error("That member no longer exists.");
+  const contact = (await listContacts()).get(userId);
   const db = await userDb();
   // Profile first: the database checks the caller is an admin before anything else changes.
   const updated = must(
-    await db.from("profiles").update({ name: patch.name, email: patch.email, is_admin: patch.isAdmin, active: patch.active }).eq("id", userId).select("id"),
+    await db.from("profiles").update({ name: patch.name, email: patch.email, active: patch.active }).eq("id", userId).select("id"),
     "Saving the member",
   ) as unknown[];
   if (updated.length !== 1) throw new Error("Only admins can change members.");
-  const admin = createAdminClient();
-  const account: { email?: string; email_confirm?: boolean; ban_duration?: string; user_metadata?: object } = { user_metadata: { name: patch.name } };
-  if (patch.email.toLowerCase() !== before.email.toLowerCase()) Object.assign(account, { email: patch.email, email_confirm: true });
-  if (patch.active !== before.active) account.ban_duration = patch.active ? "none" : "876000h";
-  const { error } = await admin.auth.admin.updateUserById(userId, account);
-  if (error) throw new Error(error.message);
+  if (contact?.authUserId) {
+    const account: { email?: string; email_confirm?: boolean; ban_duration?: string; user_metadata?: object } = { user_metadata: { name: patch.name } };
+    if (patch.email.toLowerCase() !== contact.email.toLowerCase()) Object.assign(account, { email: patch.email, email_confirm: true });
+    if (patch.active !== before.active) account.ban_duration = patch.active ? "none" : "876000h";
+    const { error } = await createAdminClient().auth.admin.updateUserById(contact.authUserId, account);
+    if (error) throw new Error(error.message);
+  }
   await rpc("set_member_team", { p_season: (await currentSeason()).id, p_user: userId, p_team: patch.teamId, p_effective: await effectiveDate() });
   await audit("update", "user", userId, before, patch);
   await recompute();
 }
 
+/** Give or remove admin access. Granting creates a sign-in account if needed and returns its temporary password. */
+export async function setAdminAccess(userId: string, grant: boolean): Promise<{ password: string | null }> {
+  const person = await findUser(userId);
+  const contact = (await listContacts()).get(userId);
+  if (!person || !contact) throw new Error("That member no longer exists.");
+  const db = await userDb();
+  const updated = must(await db.from("profiles").update({ is_admin: grant }).eq("id", userId).select("id"), "Saving admin access") as unknown[];
+  if (updated.length !== 1) throw new Error("Only admins can change admin access.");
+  let password: string | null = null;
+  if (grant && !contact.authUserId) password = await createLogin(userId, contact.email, person.name);
+  if (contact.authUserId) {
+    // Removing admin access also stops them signing in; granting it again lets them back in.
+    const { error } = await createAdminClient().auth.admin.updateUserById(contact.authUserId, { ban_duration: grant ? "none" : "876000h" });
+    if (error) throw new Error(error.message);
+  }
+  await audit(grant ? "grant_admin" : "revoke_admin", "user", userId, null, null);
+  return { password };
+}
+
 /** Callers must have checked the current user is an admin (the account API bypasses row-level security). */
 export async function setPassword(userId: string, password: string): Promise<void> {
-  if (!(await findUser(userId))) throw new Error("That member no longer exists.");
-  const { error } = await createAdminClient().auth.admin.updateUserById(userId, { password });
+  const contact = (await listContacts()).get(userId);
+  if (!contact?.authUserId) throw new Error("This person doesn't have a sign-in account.");
+  const { error } = await createAdminClient().auth.admin.updateUserById(contact.authUserId, { password });
   if (error) throw new Error(error.message);
   await audit("reset_password", "user", userId, null, null);
 }
@@ -364,10 +323,10 @@ export async function exportRows() {
   const leaves = await fetchAll<{ user_id: string; date: string; created_by: string | null; created_at: string }>((a, b) =>
     db.from("leave_records").select("user_id, date, created_by, created_at").eq("season_id", season.id).order("date").order("user_id").range(a, b),
   );
+  const contacts = await listContacts();
   const who = (userId: string, date: string) => {
-    const u = users.get(userId);
     const t = teamOn(userId, date);
-    return { name: u?.name ?? userId, email: u?.email ?? "", team: t ? teams.get(t) ?? "" : "" };
+    return { name: users.get(userId)?.name ?? userId, email: contacts.get(userId)?.email ?? "", team: t ? teams.get(t) ?? "" : "" };
   };
   return [
     ...entries.map((e) => ({ date: e.date, ...who(e.user_id, e.date), steps: e.steps as number | "", onLeave: "" as "yes" | "", points: pointsFor(e.steps, settings.bands) as number | "", updatedBy: users.get(e.updated_by ?? "")?.name ?? "", updatedAt: e.updated_at })),
@@ -380,7 +339,8 @@ export async function importRows(rows: { date: string; email: string; steps: str
   const season = await currentSeason();
   const s = settingsOf(season);
   const end = addDays(s.startDate, s.lengthDays - 1);
-  const users = new Map((await listUsers()).map((u) => [u.email.toLowerCase(), u]));
+  const contacts = await listContacts();
+  const users = new Map((await listUsers()).filter((u) => contacts.has(u.id)).map((u) => [contacts.get(u.id)!.email.toLowerCase(), u]));
   const history = await fetchAll<{ user_id: string; team_id: string; from_date: string; to_date: string | null }>((a, b) =>
     db.from("membership_history").select("user_id, team_id, from_date, to_date").eq("season_id", season.id).order("from_date").range(a, b),
   );

@@ -1,6 +1,7 @@
 // Demo data and first-time setup. Uses the service-role client; no Next.js imports, so
 // the npm scripts in scripts/ can run it directly.
 
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, mondayOf } from "../engine/dates.ts";
 import { DEFAULT_SETTINGS } from "../engine/defaults.ts";
@@ -70,22 +71,35 @@ async function insertChunks(admin: SupabaseClient, table: string, rows: Record<s
   for (let i = 0; i < rows.length; i += 1000) must(await admin.from(table).insert(rows.slice(i, i + 1000)), `Writing ${table}`);
 }
 
-/** Replace the season with fresh demo data dated around today. Demo accounts use DEMO_PASSWORD. */
+/** Replace the season with fresh demo data dated around today. Only the demo admin gets a sign-in account. */
 export async function seedDemo(admin: SupabaseClient, log: (m: string) => void = () => {}): Promise<void> {
   const demo = buildDemoData(todayFor(DEFAULT_SETTINGS.timezone));
 
-  log("Preparing 21 demo sign-in accounts…");
+  log("Preparing people and the demo admin account…");
   const accounts = await authUsersByEmail(admin);
+  // Participants don't sign in any more: remove accounts left over from earlier demos.
+  for (const m of demo.members.filter((x) => !x.isAdmin)) {
+    const id = accounts.get(m.email.toLowerCase());
+    if (id) {
+      const { error } = await admin.auth.admin.deleteUser(id);
+      if (error) throw new Error(`Removing the old account for ${m.email} failed: ${error.message}`);
+    }
+  }
+  const existing = must(await admin.from("profiles").select("id, email"), "Loading people") as { id: string; email: string }[];
+  const profileIdByEmail = new Map(existing.map((p) => [p.email.toLowerCase(), p.id]));
   const idOf = new Map<string, string>();
-  for (const m of demo.members) idOf.set(m.id, await upsertAccount(admin, accounts, m.email, DEMO_PASSWORD, m.name));
+  const profiles = [];
+  for (const m of demo.members) {
+    const id = profileIdByEmail.get(m.email.toLowerCase()) ?? randomUUID();
+    idOf.set(m.id, id);
+    const authUserId = m.isAdmin ? await upsertAccount(admin, accounts, m.email, DEMO_PASSWORD, m.name) : null;
+    profiles.push({ id, name: m.name, email: m.email, is_admin: m.isAdmin, active: true, auth_user_id: authUserId });
+  }
 
   log("Clearing the old season…");
   must(await admin.from("seasons").delete().not("id", "is", null), "Clearing seasons");
   must(await admin.from("audit_log").delete().gte("id", 0), "Clearing the audit log");
-  must(
-    await admin.from("profiles").upsert(demo.members.map((m) => ({ id: idOf.get(m.id)!, name: m.name, email: m.email, is_admin: m.isAdmin, active: true }))),
-    "Saving profiles",
-  );
+  must(await admin.from("profiles").upsert(profiles), "Saving people");
 
   log("Creating teams, entries and fixtures…");
   const seasonId = await insertSeason(admin, demo.settings);
@@ -114,16 +128,13 @@ export async function seedDemo(admin: SupabaseClient, log: (m: string) => void =
     "membership_history",
     onTeam.map((m) => ({ season_id: seasonId, user_id: idOf.get(m.id), team_id: teamIdOf.get(m.teamId!), from_date: demo.settings.startDate })),
   );
-  const leadOf = (userId: string) => {
-    const teamId = demo.members.find((m) => m.id === userId)?.teamId;
-    return idOf.get(demo.members.find((m) => m.teamId === teamId && m.isLead)!.id);
-  };
+  const adminProfile = idOf.get(demo.members.find((m) => m.isAdmin)!.id);
   await insertChunks(
     admin,
     "step_entries",
-    demo.entries.map((e) => ({ season_id: seasonId, user_id: idOf.get(e.userId), date: e.date, steps: e.steps, updated_by: leadOf(e.userId), updated_at: `${e.date}T15:00:00Z` })),
+    demo.entries.map((e) => ({ season_id: seasonId, user_id: idOf.get(e.userId), date: e.date, steps: e.steps, updated_by: adminProfile, updated_at: `${e.date}T15:00:00Z` })),
   );
-  await insertChunks(admin, "leave_records", demo.leaves.map((l) => ({ season_id: seasonId, user_id: idOf.get(l.userId), date: l.date, created_by: leadOf(l.userId) })));
+  await insertChunks(admin, "leave_records", demo.leaves.map((l) => ({ season_id: seasonId, user_id: idOf.get(l.userId), date: l.date, created_by: adminProfile })));
   await insertFixtures(admin, seasonId, demo.settings, demo.teams.map((t) => teamIdOf.get(t.id)!));
   await insertChunks(admin, "weekly_challenges", demo.challenges.map((c) => ({ season_id: seasonId, week_index: c.weekIndex, type: c.type })));
 
@@ -138,8 +149,14 @@ export async function seedDemo(admin: SupabaseClient, log: (m: string) => void =
  */
 export async function setupSeason(admin: SupabaseClient, adminAccount: { email: string; password: string; name: string }, log: (m: string) => void = () => {}): Promise<void> {
   const accounts = await authUsersByEmail(admin);
-  const adminId = await upsertAccount(admin, accounts, adminAccount.email, adminAccount.password, adminAccount.name);
-  must(await admin.from("profiles").upsert({ id: adminId, name: adminAccount.name, email: adminAccount.email, is_admin: true, active: true }), "Saving the admin profile");
+  const authUserId = await upsertAccount(admin, accounts, adminAccount.email, adminAccount.password, adminAccount.name);
+  const existing = must(await admin.from("profiles").select("id").eq("email", adminAccount.email).maybeSingle(), "Loading the admin profile") as { id: string } | null;
+  must(
+    await admin
+      .from("profiles")
+      .upsert({ id: existing?.id ?? randomUUID(), name: adminAccount.name, email: adminAccount.email, is_admin: true, active: true, auth_user_id: authUserId }),
+    "Saving the admin profile",
+  );
   log(`Admin account ready: ${adminAccount.email}`);
 
   if (await activeSeason(admin)) {

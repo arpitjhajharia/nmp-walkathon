@@ -4,11 +4,11 @@ import { Field, inputCls } from "@/components/fields";
 import { Flash } from "@/components/flash";
 import { TEAM_ICONS, TeamIcon } from "@/components/team";
 import { Card, Chip, SectionTitle } from "@/components/ui";
-import { getSettings, listTeams, listUsers } from "@/lib/server/data";
-import { AddMemberForm, ResetPasswordForm } from "./member-forms";
+import { getSettings, listContacts, listTeams, listUsers } from "@/lib/server/data";
+import { AddMemberForm, AdminAccessForm, ResetPasswordForm } from "./member-forms";
 
 export default async function TeamsAdmin({ searchParams }: PageProps<"/admin/teams">) {
-  const [teams, users, settings] = await Promise.all([listTeams(), listUsers(), getSettings()]);
+  const [teams, users, settings, contacts] = await Promise.all([listTeams(), listUsers(), getSettings(), listContacts()]);
   const unassigned = users.filter((u) => !u.teamId);
 
   return (
@@ -36,9 +36,9 @@ export default async function TeamsAdmin({ searchParams }: PageProps<"/admin/tea
                   <Field label="Name" htmlFor={`name-${t.id}`}>
                     <input id={`name-${t.id}`} name="name" defaultValue={t.name} required className={inputCls} />
                   </Field>
-                  <Field label="Team lead" htmlFor={`lead-${t.id}`}>
+                  <Field label="Captain" htmlFor={`lead-${t.id}`} hint="Shown on the team page. Captains can't change anything.">
                     <select id={`lead-${t.id}`} name="leadUserId" defaultValue={t.leadUserId ?? ""} className={inputCls}>
-                      <option value="">No lead</option>
+                      <option value="">No captain</option>
                       {members.map((m) => (
                         <option key={m.id} value={m.id}>{m.name}</option>
                       ))}
@@ -65,7 +65,7 @@ export default async function TeamsAdmin({ searchParams }: PageProps<"/admin/tea
       </section>
 
       <section className="mt-10">
-        <SectionTitle title="Add a member" sub="Members sign in with their email and the temporary password you share." />
+        <SectionTitle title="Add a member" sub="People don't need an account to view the site. Only admins get a sign-in (and a temporary password to share)." />
         <Card className="p-5">
           <AddMemberForm teams={teams.map((t) => ({ id: t.id, name: t.name }))} />
         </Card>
@@ -83,9 +83,9 @@ export default async function TeamsAdmin({ searchParams }: PageProps<"/admin/tea
                     {team ? <TeamIcon team={team} size="sm" /> : <span className="size-6 rounded-md bg-line" aria-hidden="true" />}
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-semibold">{u.name}</span>
-                      <span className="block truncate text-xs text-muted">{u.email} · {team?.name ?? "No team"}</span>
+                      <span className="block truncate text-xs text-muted">{contacts.get(u.id)?.email ?? ""} · {team?.name ?? "No team"}</span>
                     </span>
-                    {team?.leadUserId === u.id && <Chip>Lead</Chip>}
+                    {team?.leadUserId === u.id && <Chip>Captain</Chip>}
                     {u.isAdmin && <Chip tone="info">Admin</Chip>}
                     {!u.active && <Chip tone="warn">Inactive</Chip>}
                     <span className="text-sm font-semibold text-night-3 group-open:hidden">Edit</span>
@@ -97,7 +97,7 @@ export default async function TeamsAdmin({ searchParams }: PageProps<"/admin/tea
                         <input id={`n-${u.id}`} name="name" defaultValue={u.name} required className={inputCls} />
                       </Field>
                       <Field label="Email" htmlFor={`e-${u.id}`}>
-                        <input id={`e-${u.id}`} name="email" type="email" defaultValue={u.email} required className={inputCls} />
+                        <input id={`e-${u.id}`} name="email" type="email" defaultValue={contacts.get(u.id)?.email ?? ""} required className={inputCls} />
                       </Field>
                       <Field label="Team" htmlFor={`t-${u.id}`}>
                         <select id={`t-${u.id}`} name="teamId" defaultValue={u.teamId ?? ""} className={inputCls}>
@@ -111,16 +111,16 @@ export default async function TeamsAdmin({ searchParams }: PageProps<"/admin/tea
                         <label className="flex items-center gap-2">
                           <input type="checkbox" name="active" defaultChecked={u.active} className="size-4.5 accent-night" /> Active
                         </label>
-                        <label className="flex items-center gap-2">
-                          <input type="checkbox" name="isAdmin" defaultChecked={u.isAdmin} className="size-4.5 accent-night" /> Admin
-                        </label>
                       </div>
                       <div className="sm:col-span-2">
                         <SubmitButton variant="secondary">Save {u.name.split(" ")[0]}</SubmitButton>
                       </div>
                     </form>
                     <div className="mt-3 border-t border-line-2 pt-3">
-                      <ResetPasswordForm userId={u.id} name={u.name} />
+                      <div className="flex flex-wrap items-start gap-2">
+                        <AdminAccessForm userId={u.id} grant={!u.isAdmin} />
+                        {u.isAdmin && contacts.get(u.id)?.authUserId && <ResetPasswordForm userId={u.id} name={u.name} />}
+                      </div>
                     </div>
                   </div>
                 </details>

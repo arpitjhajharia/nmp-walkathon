@@ -2,8 +2,8 @@
 
 A 100-day office walking league: four teams of five, daily step points, weekly
 head-to-head fixtures, a league table, monthly cups, a Final Sprint, individual awards,
-badges and optional weekly challenges. Team leads enter steps; everything else updates
-automatically.
+badges and optional weekly challenges. Anyone can follow along without signing in; admins
+enter steps and everything else updates automatically.
 
 ## Setup
 
@@ -14,8 +14,9 @@ are plenty for a 20-person office league. You need Node.js 22.6+ for local devel
 
 1. At [supabase.com](https://supabase.com), create a project. Pick the region closest to
    your office (for India, *Mumbai*).
-2. Open **SQL Editor**, paste the whole of `supabase/migrations/20260922000000_walkathon.sql`,
-   and run it. (With the Supabase CLI, `supabase db push` does the same.)
+2. Open **SQL Editor** and run each file in `supabase/migrations/` in order: paste the whole
+   file, click **Run** (choose "Run without RLS" if asked; the files switch RLS on
+   themselves), then the next. (With the Supabase CLI, `supabase db push` does the same.)
 3. Go to **Authentication → Sign In / Providers** and turn **off** "Allow new users to sign
    up". Only people an admin adds should get in. (Row-level security already hides
    everything from anyone without an active profile, but there's no reason to allow sign-ups.)
@@ -27,15 +28,16 @@ are plenty for a 20-person office league. You need Node.js 22.6+ for local devel
 ```bash
 cp .env.example .env.local   # then fill in the three Supabase values
 npm install
-npm run seed:demo            # optional: sample season, demo accounts (password walk2026)
+npm run check                # confirms the keys and database are set up
+npm run seed:demo            # optional: sample season; the demo admin's password is walk2026
 npm run dev
 ```
 
 For a real season instead of demo data, set `ADMIN_EMAIL`, `ADMIN_PASSWORD` and `ADMIN_NAME`
 in `.env.local` and run `npm run setup`. It creates your admin account and an empty season
 with four placeholder teams starting next Monday. Then sign in, open **Admin**, set the
-dates, rename the teams, add the 20 members (each gets a temporary password to share
-privately) and choose each team's lead. Members can change their password under **Account**.
+dates, rename the teams, add the 20 members and choose each team's captain. To add another
+admin, use **Make admin** on their row; they get a temporary password to change under **Account**.
 
 ### 3. Deploy to Vercel
 
@@ -45,8 +47,8 @@ privately) and choose each team's lead. Members can change their password under 
    Marketplace fills in the Supabase ones automatically.
 3. Deploy. Every push to `main` redeploys.
 
-Set `DEMO_MODE=true` only while you're trying things out with demo data. It shows one-click
-demo sign-ins and a **Reset demo data** button.
+Set `DEMO_MODE=true` only while you're trying things out with demo data. It shows a one-click
+demo admin sign-in and a **Reset demo data** button.
 
 | Script | What it does |
 | --- | --- |
@@ -56,22 +58,22 @@ demo sign-ins and a **Reset demo data** button.
 | `npm run test:db` | Database security tests: runs the migration in an in-memory Postgres and checks who can read and write what |
 | `npm run setup` | First-time admin account and empty season |
 | `npm run seed:demo` | Replace everything with demo data (asks first) |
+| `npm run check` | Check `.env.local` points at a set-up Supabase project |
 
 ## How it's built
 
 - **Next.js 16 (App Router) + React 19 + Tailwind CSS 4** on Vercel. Server components render
   every page; changes go through server actions.
-- **Supabase Auth** for sign-in (email and password, no self sign-up). `ALLOWED_EMAIL_DOMAIN`
-  limits sign-in to your company's addresses.
-- **Supabase Postgres with row-level security does the authorisation.** Every request runs
-  as the signed-in user, so the database itself enforces the rules:
-  - only active members can read anything;
-  - team leads can write only their own team's entries, only inside the correction window
-    (or on a date an admin unlocked), and never future dates;
-  - only admins can change settings, teams, members, fixtures, challenges and locks;
-  - the audit log is admin-only and can't be written to directly.
-  Multi-step changes (saving a day, moving a member, rebuilding fixtures, deciding a
-  correction) are Postgres functions, so they happen in one transaction.
+- **Supabase Auth** for admin sign-in (email and password, no self sign-up).
+  `ALLOWED_EMAIL_DOMAIN` limits sign-in and new members to your company's addresses.
+- **Supabase Postgres with row-level security does the authorisation.** Visitors read
+  through the public (anon) role and admins act as themselves, so the database enforces:
+  - anyone can read the competition, but never email addresses or the audit log;
+  - only active admins can write anything: steps and leave (never future dates), settings,
+    teams, members, fixtures and challenges;
+  - the audit log can't be written to directly.
+  Multi-step changes (saving a day, moving a member, rebuilding fixtures) are Postgres
+  functions, so they happen in one transaction.
 - **The service-role key** is used on the server only, for three things: creating and updating
   sign-in accounts, writing the computed results tables, and seeding demo data.
 - **One scoring engine** (`src/lib/engine/engine.ts`), pure and unit-tested. Pages compute
@@ -94,16 +96,18 @@ supabase/tests/        database security tests
 scripts/               setup and demo seeding
 ```
 
-## Roles
+## Who can do what
 
-- **Participant:** home, standings, schedule, teams, leaderboard, awards, my progress, rules, account.
-- **Team lead** (set per team by an admin): also **Enter steps** for their own team, edit
-  within the correction window, mark leave, see entry status, and request an unlock for a
-  locked date.
-- **Admin:** also the **Admin** area: season dates and rules, teams, members and leads,
-  fixtures and challenges, correction requests, date locks, leave records, CSV import and
-  export, Sheets backup, weekly recap and audit log. Admins can enter steps for any team and
-  date.
+- **Everyone (no sign-in):** home, standings, schedule, teams, players (each person's
+  progress), leaderboards, awards and rules. The site is open and read-only.
+- **Admins** sign in from the "Admin sign-in" link at the bottom of any page. Only they can
+  enter steps (any team, any day of the season up to today), mark leave, and use the Admin
+  area: season dates and rules, teams, captains, members and admin access, fixtures and
+  challenges, leave records, CSV import and export, Sheets backup, weekly recap and audit log.
+
+People don't need accounts. Only admins get a sign-in (with a temporary password to share,
+which they can change under **Account**). Each team can have a **captain**, shown on the
+team page; captains can't change anything.
 
 ## Season rules (all configurable in Admin → Season & rules)
 
@@ -121,8 +125,8 @@ scripts/               setup and demo seeding
   A missing entry earns 0 and is never auto-filled.
 - Moving a member to another team takes effect from that day; their earlier steps and points
   stay with the team they were on at the time.
-- Leads can edit until 11:59 PM the next day (`correctionDays`); older dates lock unless an admin
-  unlocks them. Values above 50,000 need an extra confirmation.
+- Admins can enter or correct any day of the season up to today. Values above 50,000 need an
+  extra confirmation. A finished week's result shows as provisional for `correctionDays` days.
 - Monthly Cup per calendar month; Final Sprint trophy for the last 14 days; Season Champion is
   the league leader at the end.
 - Awards every Sunday with joint winners on ties: Weekly MVP, Consistency Star, Comeback Walker
@@ -149,6 +153,9 @@ See `.env.example`:
 
 ## Good to know
 
+- **The site is public.** Anyone with the link can see names and daily steps. If that's too
+  open, add a custom domain on your company network, or turn on Vercel's password protection
+  (a paid Vercel feature).
 - **Dates and deadlines** use the season timezone (default `Asia/Kolkata`), both in the app and
   in the database rules.
 - **Backups:** Supabase's free tier has no automatic backups you can restore yourself. Use
@@ -157,6 +164,6 @@ See `.env.example`:
 - **Free-tier pausing:** Supabase pauses free projects after a week with no activity. During the
   season, daily entries keep it awake; if it pauses between seasons, resume it from the
   Supabase dashboard.
-- **Password emails:** members sign in with passwords their admin sets, so the app never
+- **Password emails:** admins sign in with passwords another admin sets, so the app never
   depends on Supabase sending email. (Supabase's built-in email is heavily rate-limited; add
   your own SMTP in Supabase if you later want self-service password resets.)

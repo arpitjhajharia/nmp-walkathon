@@ -43,7 +43,7 @@ function miniSnapshot(entries: Entry[], leaves: Leave[] = []): Snapshot {
   const start = "2026-08-03"; // Monday
   const teams = ["a", "b", "c", "d"].map((id) => ({ id, slug: id, name: `Team ${id.toUpperCase()}`, color: "#000", icon: "rocket", leadUserId: null }));
   const members: Member[] = teams.flatMap((t) =>
-    [1, 2, 3, 4, 5].map((i) => ({ id: `${t.id}${i}`, name: `${t.id}${i}`, email: `${t.id}${i}@x`, teamId: t.id, isAdmin: false, active: true })),
+    [1, 2, 3, 4, 5].map((i) => ({ id: `${t.id}${i}`, name: `${t.id}${i}`, teamId: t.id, isAdmin: false, active: true })),
   );
   const fixtures = generateFixtures(["a", "b", "c", "d"], 15).map((f, i) => ({ ...f, id: `f${i}` }));
   return { settings: { ...DEFAULT_SETTINGS, startDate: start }, teams, members, entries, leaves, fixtures, challenges: [] };

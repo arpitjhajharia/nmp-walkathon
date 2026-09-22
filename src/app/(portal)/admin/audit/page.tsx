@@ -6,8 +6,6 @@ import { getPortal } from "@/lib/server/season";
 const FILTERS: { id: string; label: string; entities?: string[] }[] = [
   { id: "all", label: "Everything" },
   { id: "step_entry", label: "Step entries", entities: ["step_entry", "step_entries", "leave_records"] },
-  { id: "correction_request", label: "Corrections", entities: ["correction_request"] },
-  { id: "date_lock", label: "Locks", entities: ["date_lock"] },
   { id: "user", label: "Members", entities: ["user", "team"] },
   { id: "season", label: "Settings", entities: ["season", "fixtures", "weekly_challenge", "demo"] },
 ];

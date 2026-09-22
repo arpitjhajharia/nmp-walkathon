@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { createMember, resetPassword, type MemberState } from "@/app/actions/admin";
+import { changeAdminAccess, createMember, resetPassword, type MemberState } from "@/app/actions/admin";
 import { SubmitButton } from "@/components/client";
 import { Field, inputCls } from "@/components/fields";
 
@@ -34,7 +34,7 @@ export function AddMemberForm({ teams }: { teams: { id: string; name: string }[]
         </select>
       </Field>
       <label className="flex items-center gap-2 self-end pb-3 text-sm">
-        <input type="checkbox" name="isAdmin" className="size-4.5 accent-night" /> Admin access
+        <input type="checkbox" name="isAdmin" className="size-4.5 accent-night" /> Admin (can sign in and change things)
       </label>
       <div className="space-y-2 sm:col-span-2">
         <Result state={state} />
@@ -50,6 +50,18 @@ export function ResetPasswordForm({ userId, name }: { userId: string; name: stri
     <form action={action} className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="userId" value={userId} />
       <SubmitButton variant="secondary">Reset password for {name.split(" ")[0]}</SubmitButton>
+      <Result state={state} />
+    </form>
+  );
+}
+
+export function AdminAccessForm({ userId, grant }: { userId: string; grant: boolean }) {
+  const [state, action] = useActionState<MemberState | null, FormData>(changeAdminAccess, null);
+  return (
+    <form action={action} className="flex flex-wrap items-center gap-2">
+      <input type="hidden" name="userId" value={userId} />
+      <input type="hidden" name="grant" value={grant ? "yes" : "no"} />
+      <SubmitButton variant="secondary">{grant ? "Make admin" : "Remove admin access"}</SubmitButton>
       <Result state={state} />
     </form>
   );

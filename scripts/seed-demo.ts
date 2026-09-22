@@ -13,4 +13,4 @@ if (answer.trim().toLowerCase() !== "yes") {
   process.exit(0);
 }
 await seedDemo(createAdminClient(), (m) => console.log(m));
-console.log("Done. Every demo account uses the password walk2026.");
+console.log("Done. Sign in as the demo admin (wellness@office.example) with the password walk2026.");

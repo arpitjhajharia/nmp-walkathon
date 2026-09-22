@@ -13,7 +13,7 @@ export interface Settings {
   timezone: string;
   bands: Band[];
   leaguePoints: { win: number; draw: number; loss: number };
-  /** Days after a date during which team leads may still edit it (1 = until 11:59 PM next day). */
+  /** Days after a week ends during which its result is shown as provisional while corrections come in. */
   correctionDays: number;
   teamSize: number;
   finalSprintDays: number;
@@ -33,7 +33,6 @@ export interface Team {
 export interface Member {
   id: string;
   name: string;
-  email: string;
   teamId: string | null;
   isAdmin: boolean;
   active: boolean;

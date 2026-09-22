@@ -170,7 +170,7 @@ export function EntryForm({
                 <div className="min-w-0 flex-1">
                   <label htmlFor={id} className="block truncate font-semibold text-ink">
                     {r.name}
-                    {r.isLead && <span className="ml-1.5 text-xs font-normal text-muted">(lead)</span>}
+                    {r.isLead && <span className="ml-1.5 text-xs font-normal text-muted">(captain)</span>}
                   </label>
                   <p className="flex items-center gap-2 text-xs text-muted" aria-live="polite">
                     {v.leave ? (

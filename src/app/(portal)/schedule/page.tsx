@@ -6,7 +6,6 @@ import { Card, Chip, PageHeader, SectionTitle } from "@/components/ui";
 import { diffDays, formatRange } from "@/lib/engine/dates";
 import { CHALLENGE_TYPES, type TrophyRace } from "@/lib/engine/engine";
 import type { Team } from "@/lib/engine/types";
-import { requireUser } from "@/lib/server/auth";
 import { getPortal } from "@/lib/server/season";
 
 export const metadata: Metadata = { title: "Schedule" };
@@ -58,7 +57,6 @@ function RaceCard({ race, teams, today, icon }: { race: TrophyRace; teams: Map<s
 }
 
 export default async function SchedulePage() {
-  const user = await requireUser();
   const { season: s } = await getPortal();
   const teams = new Map(s.teams.map((t) => [t.id, t]));
   const current = s.currentWeek;
@@ -79,7 +77,7 @@ export default async function SchedulePage() {
             {s.fixtures
               .filter((f) => f.week.index === current.index)
               .map((f) => (
-                <FixtureCard key={f.id} f={f} teams={teams} highlightTeamId={user.teamId ?? undefined} />
+                <FixtureCard key={f.id} f={f} teams={teams} />
               ))}
           </div>
         </section>

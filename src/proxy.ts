@@ -2,8 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabasePublicKey, supabaseUrl } from "@/lib/supabase/env";
 
-// Refreshes the Supabase session cookie on each navigation and sends signed-out visitors
-// to /login. Real authorisation happens in the database (row-level security).
+// Keeps an admin's Supabase session fresh, and sends signed-out visitors who open an admin
+// page to the admin sign-in. Everything else is public. Real authorisation happens in the
+// database (row-level security).
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   const supabase = createServerClient(supabaseUrl(), supabasePublicKey(), {
@@ -22,7 +23,8 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const signedIn = Boolean(data?.claims?.sub);
   const path = request.nextUrl.pathname;
-  if (!signedIn && path !== "/login") {
+  const adminOnly = path === "/entry" || path === "/account" || path === "/admin" || path.startsWith("/admin/");
+  if (!signedIn && adminOnly) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";

@@ -8,15 +8,15 @@ import type { Band, ChallengeType, Settings } from "@/lib/engine/types";
 import { requireAdmin } from "@/lib/server/auth";
 import {
   addMember,
-  decideCorrection,
   exportRows,
   getSettings,
   importRows,
+  listContacts,
   listUsers,
   regenerateFixtures,
   removeLeave,
+  setAdminAccess,
   setChallenge,
-  setDateUnlocked,
   setPassword,
   temporaryPassword,
   setWeekPairing,
@@ -76,7 +76,7 @@ export async function saveSeason(formData: FormData) {
     correctionDays: int(formData, "correctionDays"),
     teamSize: int(formData, "teamSize"),
     finalSprintDays: int(formData, "finalSprintDays"),
-    lockOlderDates: formData.get("lockOlderDates") === "on",
+    lockOlderDates: false,
     highValueWarning: int(formData, "highValueWarning"),
   };
   if (!isValidISODate(next.startDate)) done("/admin/season", "Please choose a valid start date.", "err");
@@ -103,7 +103,7 @@ export async function saveTeam(formData: FormData) {
   if (!name) done("/admin/teams", "A team needs a name.", "err");
   if (!/^#[0-9a-f]{6}$/i.test(color)) done("/admin/teams", "Pick a team colour.", "err");
   const lead = str(formData, "leadUserId") || null;
-  if (lead && (await listUsers()).find((u) => u.id === lead)?.teamId !== teamId) done("/admin/teams", "The team lead must be a member of the team.", "err");
+  if (lead && (await listUsers()).find((u) => u.id === lead)?.teamId !== teamId) done("/admin/teams", "The captain must be a member of the team.", "err");
   try {
     await updateTeam(teamId, { name, color, icon: str(formData, "icon"), leadUserId: lead });
   } catch (e) {
@@ -125,15 +125,16 @@ export async function createMember(_prev: MemberState | null, formData: FormData
   if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, message: "Enter a name and a valid work email." };
   const domain = process.env.ALLOWED_EMAIL_DOMAIN;
   if (domain && !email.endsWith(`@${domain.toLowerCase()}`)) return { ok: false, message: `Use an @${domain} email address.` };
-  if ((await listUsers()).some((u) => u.email.toLowerCase() === email)) return { ok: false, message: "Someone already uses that email." };
-  let password: string;
+  if ([...(await listContacts()).values()].some((c) => c.email.toLowerCase() === email)) return { ok: false, message: "Someone already uses that email." };
+  let password: string | null;
   try {
     ({ password } = await addMember({ name, email, teamId: str(formData, "teamId") || null, isAdmin: formData.get("isAdmin") === "on" }));
   } catch (e) {
     return { ok: false, message: errText(e) };
   }
   revalidatePath("/", "layout");
-  return { ok: true, message: `${name} added. Share this temporary password with them privately:`, password };
+  if (password) return { ok: true, message: `${name} added as an admin. Share this temporary password with them privately:`, password };
+  return { ok: true, message: `${name} added.` };
 }
 
 export async function saveMember(formData: FormData) {
@@ -142,14 +143,12 @@ export async function saveMember(formData: FormData) {
   const name = str(formData, "name");
   const email = str(formData, "email");
   if (!name || !email.includes("@")) done("/admin/teams", "A member needs a name and email.", "err");
-  if (userId === admin.id && formData.get("isAdmin") !== "on") done("/admin/teams", "You can't remove your own admin access.", "err");
   if (userId === admin.id && formData.get("active") !== "on") done("/admin/teams", "You can't deactivate your own account.", "err");
   try {
     await updateMember(userId, {
       name,
       email,
       teamId: str(formData, "teamId") || null,
-      isAdmin: formData.get("isAdmin") === "on",
       active: formData.get("active") === "on",
     });
   } catch (e) {
@@ -167,6 +166,22 @@ export async function resetPassword(_prev: MemberState | null, formData: FormDat
     return { ok: false, message: errText(e) };
   }
   return { ok: true, message: "New temporary password. They can change it under Account after signing in:", password };
+}
+
+export async function changeAdminAccess(_prev: MemberState | null, formData: FormData): Promise<MemberState> {
+  const admin = await requireAdmin();
+  const userId = str(formData, "userId");
+  const grant = str(formData, "grant") === "yes";
+  if (!grant && userId === admin.id) return { ok: false, message: "You can't remove your own admin access." };
+  let password: string | null;
+  try {
+    ({ password } = await setAdminAccess(userId, grant));
+  } catch (e) {
+    return { ok: false, message: errText(e) };
+  }
+  revalidatePath("/", "layout");
+  if (password) return { ok: true, message: "Admin access granted. Share this temporary password with them privately:", password };
+  return { ok: true, message: grant ? "Admin access granted. They can sign in with their existing password." : "Admin access removed. They can no longer sign in." };
 }
 
 // ───────── Fixtures & challenges ─────────
@@ -205,39 +220,6 @@ export async function saveChallenge(formData: FormData) {
 }
 
 // ───────── Data, locks & corrections ─────────
-
-export async function unlockDate(formData: FormData) {
-  const admin = await requireAdmin();
-  const date = str(formData, "date");
-  if (!isValidISODate(date)) done("/admin/data", "Choose a date to unlock.", "err");
-  try {
-    await setDateUnlocked(admin.id, date, str(formData, "teamId") || "*", true);
-  } catch (e) {
-    done("/admin/data", errText(e), "err");
-  }
-  done("/admin/data", "Date unlocked for corrections.");
-}
-
-export async function lockDate(formData: FormData) {
-  const admin = await requireAdmin();
-  try {
-    await setDateUnlocked(admin.id, str(formData, "date"), str(formData, "teamId") || "*", false);
-  } catch (e) {
-    done("/admin/data", errText(e), "err");
-  }
-  done("/admin/data", "Date locked again.");
-}
-
-export async function decideRequest(formData: FormData) {
-  await requireAdmin();
-  const approve = str(formData, "decision") === "approve";
-  try {
-    await decideCorrection(str(formData, "id"), approve);
-  } catch (e) {
-    done("/admin/data", errText(e), "err");
-  }
-  done("/admin/data", approve ? "Approved: the date is unlocked for that team." : "Request declined.");
-}
 
 export async function deleteLeave(formData: FormData) {
   await requireAdmin();

@@ -1,11 +1,11 @@
 import { Award, Crown, Flag, Trophy } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FixtureCard } from "@/components/fixture-card";
 import { TeamBadge, TeamIcon } from "@/components/team";
 import { Avatar, Card, Chip, EmptyState, FormGuide, SectionTitle, compact, fmt } from "@/components/ui";
 import { formatRange, weekdayShort } from "@/lib/engine/dates";
-import { requireUser } from "@/lib/server/auth";
 import { getPortal } from "@/lib/server/season";
 
 export async function generateMetadata({ params }: PageProps<"/teams/[slug]">): Promise<Metadata> {
@@ -15,7 +15,6 @@ export async function generateMetadata({ params }: PageProps<"/teams/[slug]">): 
 }
 
 export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
-  const user = await requireUser();
   const { slug } = await params;
   const { season: s, nameOf } = await getPortal();
   const team = s.teams.find((t) => t.slug === slug);
@@ -74,9 +73,9 @@ export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
         <div className="flex flex-wrap items-center gap-5 px-5 py-6 sm:px-8">
           <TeamIcon team={team} size="xl" />
           <div className="min-w-0 flex-1 basis-48">
-            <p className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-white/60">Team{user.teamId === team.id ? " · Yours" : ""}</p>
+            <p className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-white/60">Team</p>
             <h1 className="break-words font-display text-4xl font-bold uppercase leading-none sm:text-5xl">{team.name}</h1>
-            <p className="mt-1 text-sm text-white/70">Team lead: {team.leadUserId ? nameOf(team.leadUserId) : "Not assigned"}</p>
+            <p className="mt-1 text-sm text-white/70">Captain: {team.leadUserId ? nameOf(team.leadUserId) : "Not chosen yet"}</p>
           </div>
           <dl className="tnum flex w-full gap-6 border-t border-white/10 pt-4 sm:w-auto sm:border-0 sm:pt-0 sm:text-center">
             <div>
@@ -145,9 +144,10 @@ export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
                   <td className="px-4 py-2.5">
                     <span className="flex items-center gap-2.5">
                       <Avatar name={c.name} color={c.current ? team.color : undefined} />
-                      <span className={`font-semibold ${c.current ? "" : "text-muted"}`}>{c.name}</span>
-                      {team.leadUserId === c.id && <Chip>Lead</Chip>}
-                      {c.id === user.id && <Chip tone="info">You</Chip>}
+                      <Link href={`/players/${c.id}`} className={`font-semibold hover:underline ${c.current ? "" : "text-muted"}`}>
+                        {c.name}
+                      </Link>
+                      {team.leadUserId === c.id && <Chip>Captain</Chip>}
                       {!c.current && <Chip>Former member</Chip>}
                     </span>
                   </td>

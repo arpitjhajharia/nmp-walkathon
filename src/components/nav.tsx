@@ -8,6 +8,7 @@ import {
   Home,
   KeyRound,
   LayoutList,
+  LogIn,
   LogOut,
   Medal,
   Menu,
@@ -33,9 +34,9 @@ const BASE: Item[] = [
   { href: "/standings", label: "Standings", icon: LayoutList },
   { href: "/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/teams", label: "Teams", icon: Users },
+  { href: "/players", label: "Players", icon: TrendingUp },
   { href: "/leaderboard", label: "Leaders", icon: Medal },
   { href: "/awards", label: "Awards", icon: Award },
-  { href: "/me", label: "My progress", icon: TrendingUp },
   { href: "/rules", label: "Rules", icon: BookOpen },
 ];
 
@@ -45,35 +46,26 @@ function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function Nav({
-  userName,
-  roleLabel,
-  canEnter,
-  isAdmin,
-  dayLabel,
-  signOut,
-}: {
-  userName: string;
-  roleLabel: string;
-  canEnter: boolean;
-  isAdmin: boolean;
-  dayLabel: string;
-  signOut: () => Promise<void>;
-}) {
+export function Nav({ adminName, dayLabel, signOut }: { adminName: string | null; dayLabel: string; signOut: () => Promise<void> }) {
+  const isAdmin = adminName !== null;
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const items: Item[] = [
     ...BASE,
-    ...(canEnter ? [{ href: "/entry", label: "Enter steps", icon: PencilLine }] : []),
-    ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: Settings }] : []),
+    ...(isAdmin
+      ? [
+          { href: "/entry", label: "Enter steps", icon: PencilLine },
+          { href: "/admin", label: "Admin", icon: Settings },
+        ]
+      : []),
   ];
-  const menuItems = [...items, ACCOUNT];
+  const menuItems = isAdmin ? [...items, ACCOUNT] : items;
   const bottom: Item[] = [
     BASE[0],
     BASE[1],
-    canEnter ? { href: "/entry", label: "Enter", icon: PencilLine } : BASE[2],
-    BASE[4],
+    isAdmin ? { href: "/entry", label: "Enter", icon: PencilLine } : BASE[2],
+    BASE[5],
   ];
 
   useEffect(() => setOpen(false), [pathname]);
@@ -139,8 +131,8 @@ export function Nav({
           <div className="absolute inset-y-0 right-0 flex w-[min(22rem,88vw)] flex-col bg-surface shadow-2xl">
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <div className="min-w-0">
-                <p className="truncate font-semibold text-ink">{userName}</p>
-                <p className="text-xs text-muted">{roleLabel}</p>
+                <p className="truncate font-semibold text-ink">{adminName ?? "Walkathon"}</p>
+                <p className="text-xs text-muted">{isAdmin ? "Admin" : "Everyone can view the competition"}</p>
               </div>
               <button ref={closeRef} type="button" onClick={() => setOpen(false)} className="inline-flex size-10 items-center justify-center rounded-lg hover:bg-line-2" aria-label="Close menu">
                 <X className="size-5" aria-hidden="true" />
@@ -164,18 +156,27 @@ export function Nav({
                 ))}
               </ul>
             </nav>
-            <form
-              action={async () => {
-                await signOut();
-                window.location.assign("/login");
-              }}
-              className="border-t border-line p-3"
-            >
-              <button type="submit" className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-semibold text-ink-2 hover:bg-line-2">
-                <LogOut className="size-5 text-muted" aria-hidden="true" />
-                Sign out
-              </button>
-            </form>
+            {isAdmin ? (
+              <form
+                action={async () => {
+                  await signOut();
+                  window.location.assign("/");
+                }}
+                className="border-t border-line p-3"
+              >
+                <button type="submit" className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-semibold text-ink-2 hover:bg-line-2">
+                  <LogOut className="size-5 text-muted" aria-hidden="true" />
+                  Sign out
+                </button>
+              </form>
+            ) : (
+              <div className="border-t border-line p-3">
+                <Link href="/login" className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-semibold text-ink-2 hover:bg-line-2">
+                  <LogIn className="size-5 text-muted" aria-hidden="true" />
+                  Admin sign-in
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { AlertCircle, CalendarClock, ClipboardList, Users } from "lucide-react";
+import { CalendarClock, ClipboardList, PencilLine, Users } from "lucide-react";
 import Link from "next/link";
 import { CopyButton } from "@/components/client";
 import { Flash } from "@/components/flash";
@@ -6,13 +6,11 @@ import { TeamBadge } from "@/components/team";
 import { Card, Chip, SectionTitle } from "@/components/ui";
 import { addDays, formatDay, formatRange } from "@/lib/engine/dates";
 import { weeklyRecap } from "@/lib/engine/engine";
-import { correctionRequests } from "@/lib/server/data";
 import { getPortal } from "@/lib/server/season";
 
 export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
   const sp = await searchParams;
   const { season: s, nameOf } = await getPortal();
-  const pending = await correctionRequests("pending");
   const completed = s.weeks.filter((w) => w.status === "completed");
   const weekParam = Number(sp.week);
   const recapWeek = Number.isInteger(weekParam) && s.weeks[weekParam - 1] ? s.weeks[weekParam - 1] : completed[completed.length - 1];
@@ -27,7 +25,12 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
         {[
           { icon: CalendarClock, label: "Season", value: s.phase === "live" ? `Day ${s.dayNumber} / ${s.settings.lengthDays}` : s.phase === "pre" ? "Not started" : "Finished", href: "/admin/season" },
           { icon: Users, label: "Participants", value: `${s.participants.length} in ${s.teams.length} teams`, href: "/admin/teams" },
-          { icon: AlertCircle, label: "Correction requests", value: pending.length ? `${pending.length} waiting` : "None waiting", href: "/admin/data" },
+          {
+            icon: PencilLine,
+            label: "Entered today",
+            value: `${s.participants.filter((m) => { const d = s.memberDay(m.id, s.today); return d.leave || d.steps !== null; }).length} / ${s.participants.length}`,
+            href: "/entry",
+          },
         ].map((x) => (
           <Link key={x.label} href={x.href} className="rounded-2xl border border-line bg-surface p-4 hover:shadow-sm">
             <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
@@ -40,7 +43,7 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
 
       {statusDays.length > 0 && (
         <section className="mt-8">
-          <SectionTitle title="Entry status" sub="Leads can edit until 11:59 PM the day after." />
+          <SectionTitle title="Entry status" sub="Tap a status to enter or correct that team's day." />
           <Card className="overflow-x-auto">
             <table className="w-full min-w-[420px] text-sm">
               <thead>
@@ -114,9 +117,9 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
         <SectionTitle title="Quick links" />
         <ul className="grid gap-2 sm:grid-cols-2">
           {[
-            ["/admin/data", "Review correction requests and unlock dates"],
+            ["/entry", "Enter today's steps"],
             ["/admin/schedule", "Pick next week's challenge"],
-            ["/admin/teams", "Add a member or change a team lead"],
+            ["/admin/teams", "Add a member, change a captain or give admin access"],
             ["/admin/audit", "See who changed what"],
           ].map(([href, label]) => (
             <li key={href}>

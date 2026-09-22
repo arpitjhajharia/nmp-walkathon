@@ -1,4 +1,4 @@
-import { currentUser } from "@/lib/server/auth";
+import { currentAdmin } from "@/lib/server/auth";
 import { exportRows } from "@/lib/server/data";
 
 const cell = (v: unknown) => {
@@ -7,8 +7,7 @@ const cell = (v: unknown) => {
 };
 
 export async function GET() {
-  const user = await currentUser();
-  if (!user?.isAdmin) return new Response("Not allowed", { status: 403 });
+  if (!(await currentAdmin())) return new Response("Not allowed", { status: 403 });
   const rows = await exportRows();
   const header = ["date", "name", "email", "team", "steps", "on_leave", "points", "updated_by", "updated_at"];
   const body = [header.join(","), ...rows.map((r) => [r.date, r.name, r.email, r.team, r.steps, r.onLeave, r.points, r.updatedBy, r.updatedAt].map(cell).join(","))].join("\n");

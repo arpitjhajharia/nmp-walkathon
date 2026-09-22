@@ -3,13 +3,11 @@ import { StandingsTable } from "@/components/standings-table";
 import { TeamBadge } from "@/components/team";
 import { Card, PageHeader, SectionTitle, compact, fmt } from "@/components/ui";
 import { formatRange } from "@/lib/engine/dates";
-import { requireUser } from "@/lib/server/auth";
 import { getPortal } from "@/lib/server/season";
 
 export const metadata: Metadata = { title: "Standings" };
 
 export default async function StandingsPage() {
-  const user = await requireUser();
   const { season: s } = await getPortal();
   const teams = new Map(s.teams.map((t) => [t.id, t]));
   const last = s.lastCompletedWeek;
@@ -28,7 +26,7 @@ export default async function StandingsPage() {
       )}
 
       <Card className="p-0 sm:p-2">
-        <StandingsTable rows={s.standings} teams={teams} full highlightTeamId={user.teamId} />
+        <StandingsTable rows={s.standings} teams={teams} full />
       </Card>
 
       <dl className="mt-4 grid gap-x-6 gap-y-1 text-xs text-muted sm:grid-cols-2">

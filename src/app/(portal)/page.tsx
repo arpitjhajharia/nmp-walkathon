@@ -6,17 +6,14 @@ import { TeamBadge, TeamIcon } from "@/components/team";
 import { Card, Chip, EmptyState, Progress, SectionTitle, fmt, joinNames } from "@/components/ui";
 import { diffDays, formatDay, formatRange, formatShort } from "@/lib/engine/dates";
 import { BADGES, todayInsight } from "@/lib/engine/engine";
-import { requireUser } from "@/lib/server/auth";
 import { getPortal } from "@/lib/server/season";
 
 export default async function HomePage() {
-  const user = await requireUser();
   const { season: s, nameOf } = await getPortal();
   const teams = new Map(s.teams.map((t) => [t.id, t]));
-  const myTeamId = user.teamId;
   const week = s.currentWeek;
   const weekFixtures = week ? s.fixtures.filter((f) => f.week.index === week.index) : [];
-  const orderedFixtures = [...weekFixtures].sort((a, b) => Number(b.home.teamId === myTeamId || b.away.teamId === myTeamId) - Number(a.home.teamId === myTeamId || a.away.teamId === myTeamId));
+  const orderedFixtures = weekFixtures;
 
   const todayRecorded = s.participants.filter((m) => {
     const d = s.memberDay(m.id, s.today);
@@ -26,7 +23,6 @@ export default async function HomePage() {
   const inSeason = s.phase === "live";
 
   const challenge = week ? s.challenges.find((c) => c.weekIndex === week.index) : undefined;
-  const myChallenge = challenge?.progress.find((p) => p.userId === user.id);
   const challengeDone = challenge?.progress.filter((p) => p.completed).length ?? 0;
 
   const lastAwards = s.lastCompletedWeek ? s.weeklyAwards.find((a) => a.weekIndex === s.lastCompletedWeek!.index) : undefined;
@@ -94,7 +90,7 @@ export default async function HomePage() {
         {orderedFixtures.length ? (
           <div className="grid gap-3 md:grid-cols-2">
             {orderedFixtures.map((f) => (
-              <FixtureCard key={f.id} f={f} teams={teams} highlightTeamId={myTeamId ?? undefined} />
+              <FixtureCard key={f.id} f={f} teams={teams} />
             ))}
           </div>
         ) : (
@@ -111,7 +107,7 @@ export default async function HomePage() {
             action={{ href: "/standings", label: "Full table" }}
           />
           <Card className="p-0 sm:p-1">
-            <StandingsTable rows={s.standings} teams={teams} highlightTeamId={myTeamId} />
+            <StandingsTable rows={s.standings} teams={teams} />
           </Card>
         </section>
 
@@ -181,17 +177,6 @@ export default async function HomePage() {
                   <p className="text-sm text-muted">{challenge.description}</p>
                 </div>
               </div>
-              {myChallenge && (
-                <div className="mt-4">
-                  <div className="mb-1 flex justify-between text-sm">
-                    <span className="font-semibold">Your progress</span>
-                    <span className="tnum text-muted">
-                      {myChallenge.completed ? "Done" : `${myChallenge.current} of ${myChallenge.target}`}
-                    </span>
-                  </div>
-                  <Progress value={myChallenge.current} max={myChallenge.target} color={myChallenge.completed ? "#15803d" : "#0d1b2e"} label="Your challenge progress" />
-                </div>
-              )}
               <p className="mt-3 text-sm text-muted">
                 <span className="tnum font-semibold text-ink">{challengeDone}</span> of {challenge.progress.length} people have completed it this week.
               </p>

@@ -5,7 +5,6 @@ import { TeamBadge, TeamIcon } from "@/components/team";
 import { Card, Chip, EmptyState, PageHeader, Progress, SectionTitle, joinNames } from "@/components/ui";
 import { formatRange } from "@/lib/engine/dates";
 import { BADGES, type AwardWinner, type WeeklyAwards } from "@/lib/engine/engine";
-import { requireUser } from "@/lib/server/auth";
 import { getPortal } from "@/lib/server/season";
 
 export const metadata: Metadata = { title: "Awards" };
@@ -19,14 +18,12 @@ const AWARDS: { key: keyof Omit<WeeklyAwards, "weekIndex" | "final">; label: str
 
 
 export default async function AwardsPage() {
-  const user = await requireUser();
   const { season: s, nameOf } = await getPortal();
   const teams = new Map(s.teams.map((t) => [t.id, t]));
   const final = s.weeklyAwards.filter((a) => a.final);
   const latest = final[final.length - 1];
   const liveAwards = s.weeklyAwards.find((a) => !a.final);
   const challenge = s.currentWeek ? s.challenges.find((c) => c.weekIndex === s.currentWeek!.index) : undefined;
-  const myStats = s.stats.get(user.id);
 
   const Winners = ({ ws }: { ws: AwardWinner[] }) =>
     ws.length === 0 ? (
@@ -39,7 +36,6 @@ export default async function AwardsPage() {
             <li key={w.userId} className="flex items-center gap-2">
               {team && <TeamIcon team={team} size="sm" />}
               <span className="font-semibold">{nameOf(w.userId)}</span>
-              {w.userId === user.id && <Chip tone="info">You</Chip>}
             </li>
           );
         })}
@@ -145,35 +141,22 @@ export default async function AwardsPage() {
       )}
 
       <section className="mb-10">
-        <SectionTitle title="Badges" sub="Personal milestones. Your progress is shown on each." />
+        <SectionTitle title="Badges" sub="Personal milestones. Open anyone's page from Players to see their progress." />
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {BADGES.map((b) => {
             const Icon = BADGE_ICONS[b.id] ?? Award;
-            const holders = [...s.stats.values()].filter((st) => st.badges.find((x) => x.id === b.id)?.unlockedOn).length;
-            const mine = myStats?.badges.find((x) => x.id === b.id);
-            const earned = Boolean(mine?.unlockedOn);
+            const holders = [...s.stats.values()].filter((st) => st.badges.find((x) => x.id === b.id)?.unlockedOn);
             return (
-              <Card key={b.id} className={`p-4 ${earned ? "" : "bg-surface/70"}`}>
-                <span className={`inline-flex size-10 items-center justify-center rounded-full ${earned ? "bg-accent text-night" : "bg-line-2 text-muted"}`}>
+              <Card key={b.id} className="p-4">
+                <span className={`inline-flex size-10 items-center justify-center rounded-full ${holders.length ? "bg-accent text-night" : "bg-line-2 text-muted"}`}>
                   <Icon className="size-5" aria-hidden="true" />
                 </span>
                 <p className="mt-2 font-semibold">{b.name}</p>
                 <p className="text-xs text-muted">{b.description}</p>
-                {mine && (
-                  <div className="mt-2">
-                    {earned ? (
-                      <Chip tone="good">Earned</Chip>
-                    ) : (
-                      <>
-                        <Progress value={mine.progress} max={mine.target} label={`${b.name} progress`} />
-                        <p className="tnum mt-1 text-xs text-muted">
-                          {mine.progress.toLocaleString("en-US")} / {mine.target.toLocaleString("en-US")} {b.unit}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                )}
-                <p className="tnum mt-2 text-xs text-muted">{holders} {holders === 1 ? "person has" : "people have"} it</p>
+                <p className="tnum mt-2 text-xs text-muted">
+                  {holders.length} {holders.length === 1 ? "person has" : "people have"} it
+                </p>
+                {holders.length > 0 && holders.length <= 4 && <p className="mt-1 text-xs font-semibold text-ink-2">{holders.map((h) => nameOf(h.userId).split(" ")[0]).join(", ")}</p>}
               </Card>
             );
           })}

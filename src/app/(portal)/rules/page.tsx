@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { Card, PageHeader, Pips } from "@/components/ui";
 import { formatShort } from "@/lib/engine/dates";
 import { BADGES, CHALLENGE_TYPES, bandLabel, sortedBands } from "@/lib/engine/engine";
-import { requireUser } from "@/lib/server/auth";
 import { getPortal } from "@/lib/server/season";
 
 export const metadata: Metadata = { title: "Rules" };
@@ -18,12 +17,10 @@ function Block({ id, title, children }: { id: string; title: string; children: R
 }
 
 export default async function RulesPage() {
-  await requireUser();
   const { season: s } = await getPortal();
   const cfg = s.settings;
   const bands = sortedBands(cfg.bands);
   const max = s.maxDaily;
-  const deadline = cfg.correctionDays === 1 ? "until 11:59 PM the next day" : `for ${cfg.correctionDays} days afterwards, until 11:59 PM`;
 
   return (
     <>
@@ -85,12 +82,12 @@ export default async function RulesPage() {
           </Block>
 
           <Block id="leave" title="Leave">
-            <p>If you&apos;re on leave, your team lead ticks &ldquo;On leave&rdquo; for that day. You&apos;re left out of your team&apos;s possible points and your streak is paused, not broken.</p>
+            <p>If you&apos;re on leave, let an admin know and they&apos;ll mark &ldquo;On leave&rdquo; for that day. You&apos;re left out of your team&apos;s possible points and your streak is paused, not broken.</p>
             <p>A missing entry is different: it earns no points, and the portal never guesses or copies steps automatically.</p>
           </Block>
 
-          <Block id="entry" title="Entering steps & corrections">
-            <p>Team leads enter each member&apos;s daily steps. Entries for a date can be edited {deadline}. After that, the date locks; a lead can ask an admin to unlock it for a correction.</p>
+          <Block id="entry" title="Steps & corrections">
+            <p>The walkathon admins record everyone&apos;s daily steps. If a number is wrong, tell an admin: they can correct any day, and results for the week just finished stay provisional for {cfg.correctionDays} day{cfg.correctionDays === 1 ? "" : "s"} while corrections come in.</p>
             <p>Every change is recorded with who made it and when. Scores, results, standings and awards recalculate automatically after any change.</p>
           </Block>
 
@@ -117,7 +114,7 @@ export default async function RulesPage() {
               ["bands", "Daily team points"],
               ["fixtures", "Fixtures & league"],
               ["leave", "Leave"],
-              ["entry", "Entry & corrections"],
+              ["entry", "Steps & corrections"],
               ["awards", "Awards & badges"],
             ].map(([id, l]) => (
               <li key={id}>
