@@ -8,7 +8,7 @@ import { sortedBands } from "@/lib/engine/engine";
 import { getSettings } from "@/lib/server/data";
 
 export default async function SeasonSettings({ searchParams }: PageProps<"/admin/season">) {
-  const s = getSettings();
+  const s = await getSettings();
   const bands = sortedBands(s.bands);
   const end = addDays(s.startDate, s.lengthDays - 1);
   return (

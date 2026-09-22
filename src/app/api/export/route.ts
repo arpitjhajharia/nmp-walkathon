@@ -9,7 +9,7 @@ const cell = (v: unknown) => {
 export async function GET() {
   const user = await currentUser();
   if (!user?.isAdmin) return new Response("Not allowed", { status: 403 });
-  const rows = exportRows();
+  const rows = await exportRows();
   const header = ["date", "name", "email", "team", "steps", "on_leave", "points", "updated_by", "updated_at"];
   const body = [header.join(","), ...rows.map((r) => [r.date, r.name, r.email, r.team, r.steps, r.onLeave, r.points, r.updatedBy, r.updatedAt].map(cell).join(","))].join("\n");
   return new Response(body, {

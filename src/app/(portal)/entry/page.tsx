@@ -17,7 +17,7 @@ export default async function EntryPage({ searchParams }: PageProps<"/entry">) {
   const user = await requireUser();
   if (!canEnterSteps(user)) redirect("/");
   const sp = await searchParams;
-  const { season: s, nameOf } = getPortal();
+  const { season: s, nameOf } = await getPortal();
   const lastDay = s.today < s.end ? s.today : s.end;
   const requested = typeof sp.date === "string" && isValidISODate(sp.date) ? sp.date : lastDay;
   const date = requested < s.start ? s.start : requested > lastDay ? lastDay : requested;
@@ -34,18 +34,18 @@ export default async function EntryPage({ searchParams }: PageProps<"/entry">) {
   }
   if (!team) return <Notice tone="warn">No team is set up yet. An admin can add teams under Admin → Teams.</Notice>;
 
-  const perm = editPermission(user, team.id, date);
+  const perm = await editPermission(user, team.id, date);
   const members = [...s.rosterOn(team.id, date)].sort((a, b) => (a.id === team.leadUserId ? -1 : b.id === team.leadUserId ? 1 : a.name.localeCompare(b.name)));
   const yesterday = addDays(date, -1);
   const memberIds = new Set(members.map((m) => m.id));
-  const meta = new Map(entriesForDate(date).filter((e) => memberIds.has(e.userId)).map((e) => [e.userId, e]));
+  const meta = new Map((await entriesForDate(date)).filter((e) => memberIds.has(e.userId)).map((e) => [e.userId, e]));
   const rows: EntryRow[] = members.map((m) => {
     const d = s.memberDay(m.id, date);
     const y = yesterday >= s.start ? s.memberDay(m.id, yesterday) : null;
     return { userId: m.id, name: m.name, isLead: m.id === team.leadUserId, steps: d.steps, leave: d.leave, yesterday: y?.steps ?? null, yesterdayLeave: y?.leave ?? false };
   });
   const lastEdit = [...meta.values()].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0];
-  const pending = correctionRequests("pending").find((r) => r.teamId === team.id && r.date === date);
+  const pending = (await correctionRequests("pending")).find((r) => r.teamId === team.id && r.date === date);
 
   const now = nowInTz(s.settings.timezone);
   const minutesLeft = perm.editable && !user.isAdmin && !perm.unlockedByAdmin ? (s.settings.correctionDays - diffDays(date, s.today)) * 1440 + (1440 - (now.hour * 60 + now.minute)) : null;

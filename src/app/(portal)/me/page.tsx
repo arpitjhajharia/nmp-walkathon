@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "My progress" };
 
 export default async function MePage() {
   const user = await requireUser();
-  const { season: s } = getPortal();
+  const { season: s } = await getPortal();
   const st = s.stats.get(user.id);
   const team = s.teams.find((t) => t.id === user.teamId);
 

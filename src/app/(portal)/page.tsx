@@ -11,7 +11,7 @@ import { getPortal } from "@/lib/server/season";
 
 export default async function HomePage() {
   const user = await requireUser();
-  const { season: s, nameOf } = getPortal();
+  const { season: s, nameOf } = await getPortal();
   const teams = new Map(s.teams.map((t) => [t.id, t]));
   const myTeamId = user.teamId;
   const week = s.currentWeek;

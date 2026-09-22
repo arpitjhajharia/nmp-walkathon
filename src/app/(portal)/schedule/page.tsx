@@ -59,7 +59,7 @@ function RaceCard({ race, teams, today, icon }: { race: TrophyRace; teams: Map<s
 
 export default async function SchedulePage() {
   const user = await requireUser();
-  const { season: s } = getPortal();
+  const { season: s } = await getPortal();
   const teams = new Map(s.teams.map((t) => [t.id, t]));
   const current = s.currentWeek;
   const challengeFor = (i: number) => s.challenges.find((c) => c.weekIndex === i);

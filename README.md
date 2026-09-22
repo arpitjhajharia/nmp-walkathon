@@ -5,57 +5,98 @@ head-to-head fixtures, a league table, monthly cups, a Final Sprint, individual 
 badges and optional weekly challenges. Team leads enter steps; everything else updates
 automatically.
 
-## Quick start
+## Setup
 
-Requires **Node.js 22.5+** (it uses the built-in `node:sqlite`, so there are no native
-modules and no external database to set up).
+The app runs on **Vercel** with **Supabase** for the database and sign-in. Both free tiers
+are plenty for a 20-person office league. You need Node.js 22.6+ for local development.
+
+### 1. Create the Supabase project
+
+1. At [supabase.com](https://supabase.com), create a project. Pick the region closest to
+   your office (for India, *Mumbai*).
+2. Open **SQL Editor**, paste the whole of `supabase/migrations/20260922000000_walkathon.sql`,
+   and run it. (With the Supabase CLI, `supabase db push` does the same.)
+3. Go to **Authentication → Sign In / Providers** and turn **off** "Allow new users to sign
+   up". Only people an admin adds should get in. (Row-level security already hides
+   everything from anyone without an active profile, but there's no reason to allow sign-ups.)
+4. From **Project Settings → API**, copy the project URL, the anon (publishable) key and the
+   service_role (secret) key.
+
+### 2. Run it locally
 
 ```bash
+cp .env.example .env.local   # then fill in the three Supabase values
 npm install
+npm run seed:demo            # optional: sample season, demo accounts (password walk2026)
 npm run dev
 ```
 
-Open http://localhost:3000. In demo mode (the default in development) the sign-in page has
-one-click buttons for a **participant**, a **team lead** and an **admin**. Every demo account
-uses the password `walk2026`. The demo season is generated around today's date, so it is
-always mid-season with realistic data, including a team that has entered today, one partial
-and one not started.
+For a real season instead of demo data, set `ADMIN_EMAIL`, `ADMIN_PASSWORD` and `ADMIN_NAME`
+in `.env.local` and run `npm run setup`. It creates your admin account and an empty season
+with four placeholder teams starting next Monday. Then sign in, open **Admin**, set the
+dates, rename the teams, add the 20 members (each gets a temporary password to share
+privately) and choose each team's lead. Members can change their password under **Account**.
+
+### 3. Deploy to Vercel
+
+1. In Vercel, **Add New → Project** and import the GitHub repo. The defaults (Next.js) are right.
+2. Add the environment variables from `.env.example` (at least the three Supabase values
+   and `ALLOWED_EMAIL_DOMAIN`). Installing the Supabase integration from the Vercel
+   Marketplace fills in the Supabase ones automatically.
+3. Deploy. Every push to `main` redeploys.
+
+Set `DEMO_MODE=true` only while you're trying things out with demo data. It shows one-click
+demo sign-ins and a **Reset demo data** button.
 
 | Script | What it does |
 | --- | --- |
 | `npm run dev` | Development server |
 | `npm run build` / `npm start` | Production build and server |
-| `npm test` | Scoring-engine tests (bands, fixtures, standings, leave, streaks, awards) |
-| `npm run typecheck` | TypeScript check |
+| `npm test` | Scoring-engine tests (bands, fixtures, standings, leave, streaks, awards, team moves) |
+| `npm run test:db` | Database security tests: runs the migration in an in-memory Postgres and checks who can read and write what |
+| `npm run setup` | First-time admin account and empty season |
+| `npm run seed:demo` | Replace everything with demo data (asks first) |
 
 ## How it's built
 
-- **Next.js 16 (App Router) + React 19 + Tailwind CSS 4.** Server components render every
-  page; mutations are server actions.
-- **SQLite via `node:sqlite`.** The file is `data/walkathon.db` by default (`DATABASE_PATH`).
+- **Next.js 16 (App Router) + React 19 + Tailwind CSS 4** on Vercel. Server components render
+  every page; changes go through server actions.
+- **Supabase Auth** for sign-in (email and password, no self sign-up). `ALLOWED_EMAIL_DOMAIN`
+  limits sign-in to your company's addresses.
+- **Supabase Postgres with row-level security does the authorisation.** Every request runs
+  as the signed-in user, so the database itself enforces the rules:
+  - only active members can read anything;
+  - team leads can write only their own team's entries, only inside the correction window
+    (or on a date an admin unlocked), and never future dates;
+  - only admins can change settings, teams, members, fixtures, challenges and locks;
+  - the audit log is admin-only and can't be written to directly.
+  Multi-step changes (saving a day, moving a member, rebuilding fixtures, deciding a
+  correction) are Postgres functions, so they happen in one transaction.
+- **The service-role key** is used on the server only, for three things: creating and updating
+  sign-in accounts, writing the computed results tables, and seeding demo data.
 - **One scoring engine** (`src/lib/engine/engine.ts`), pure and unit-tested. Pages compute
-  daily scores, fixtures, standings, trophies, awards, badges, challenges and insights from
-  the raw entries on every request. A correction therefore updates everything it touches,
-  including past weeks. After each save the results are also written to `fixture_results`,
+  daily scores, fixtures, standings, trophies, awards, badges, challenges and insights from the
+  raw entries on every request, so a correction updates everything it touches, including past
+  weeks. After each change the results are also stored in `fixture_results`,
   `league_standings`, `weekly_awards`, `monthly_cups` and `user_badges` for reporting.
-- **Auth:** email and password (scrypt-hashed), httpOnly session cookie. There is no
-  self-signup; only people an admin adds can sign in. `ALLOWED_EMAIL_DOMAIN` restricts
-  sign-in to your company domain.
 - **Audit:** every entry change, leave change, unlock, correction decision, settings change and
   member change is logged with who did it and when (Admin → Audit log).
 
 ```
-src/lib/engine/     scoring engine, dates, demo data, tests (no framework code)
-src/lib/server/     database, queries & mutations, sessions, Sheets sync
-src/app/(portal)/   all signed-in pages; admin/ is admin-only
-src/app/actions/    server actions (auth, entry, admin)
-src/components/     shared UI (fixture card, league table, nav, team badges…)
-supabase/schema.sql Postgres/Supabase schema with row-level security (migration path)
+src/lib/engine/        scoring engine, dates, demo data, tests (no framework code)
+src/lib/server/        data access (repo.ts: plain queries; data.ts: signed-in reads/writes), seeding, Sheets sync
+src/lib/supabase/      Supabase clients (user session, service role) and settings
+src/proxy.ts           keeps the session fresh and sends signed-out visitors to /login
+src/app/(portal)/      all signed-in pages; admin/ is admin-only
+src/app/actions/       server actions (auth, entry, admin)
+supabase/migrations/   database schema, row-level security and functions
+supabase/tests/        database security tests
+scripts/               setup and demo seeding
 ```
 
 ## Roles
 
-- **Participant:** home, standings, schedule, teams, leaderboard, awards, my progress, rules.
+- **Participant:** home, standings, schedule, teams, leaderboard, awards, my progress, rules, account.
 - **Team lead** (set per team by an admin): also **Enter steps** for their own team, edit
   within the correction window, mark leave, see entry status, and request an unlock for a
   locked date.
@@ -95,33 +136,27 @@ All dates and deadlines use the season timezone (default `Asia/Kolkata`).
 
 ## Configuration
 
-Copy `.env.example` to `.env.local`. Key settings:
+See `.env.example`:
 
-- `DEMO_MODE`: sample data, quick sign-in and **Reset demo data**. Defaults to `true` in dev,
-  `false` in production.
-- `DATABASE_PATH`: SQLite file location.
-- `ADMIN_EMAIL`, `ADMIN_PASSWORD`: bootstraps the first admin on an empty non-demo database.
-  That admin then adds teams' members (each gets a temporary password to share privately).
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`: public project settings.
+- `SUPABASE_SERVICE_ROLE_KEY`: server-only secret. Keep it out of Git and never give it a
+  `NEXT_PUBLIC_` prefix.
 - `ALLOWED_EMAIL_DOMAIN`: restricts sign-in and new members to your domain.
+- `DEMO_MODE`: demo sign-in buttons and **Reset demo data**.
+- `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`: used once by `npm run setup`.
 - `GOOGLE_SHEETS_WEBHOOK_URL`, `GOOGLE_SHEETS_SECRET`: optional Sheets backup, see
   [docs/google-sheets.md](docs/google-sheets.md).
-- `WALKATHON_TODAY`: testing only; pretend it's a given date (try a date after the season ends
-  to see the season awards).
 
-## Going live
+## Good to know
 
-1. Set `DEMO_MODE=false`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ALLOWED_EMAIL_DOMAIN`, and a
-   `DATABASE_PATH` on persistent storage.
-2. `npm run build && npm start` on any Node 22.5+ host with a persistent disk: a small VM, an
-   internal server, Railway/Render/Fly with a volume, or Docker.
-3. Sign in as the admin, set the season name, start date and timezone, rename the four teams,
-   add the 20 members, and choose each team's lead.
-
-**Serverless hosts (e.g. Vercel) aren't suitable for the SQLite setup**, because their file
-system isn't persistent. For those, move to Supabase: `supabase/schema.sql` has the matching
-Postgres schema, row-level security (leads can only write their own team's entries inside the
-correction window) and audit triggers. The data layer in `src/lib/server/data.ts` is the
-single place to swap.
-
-Back up `walkathon.db` regularly (or enable the Sheets backup). Keep the database file out
-of OneDrive, Dropbox and iCloud folders, because sync clients can corrupt a live SQLite file.
+- **Dates and deadlines** use the season timezone (default `Asia/Kolkata`), both in the app and
+  in the database rules.
+- **Backups:** Supabase's free tier has no automatic backups you can restore yourself. Use
+  **Admin → Data & corrections → Download all entries (CSV)** now and then, or turn on the
+  Google Sheets backup.
+- **Free-tier pausing:** Supabase pauses free projects after a week with no activity. During the
+  season, daily entries keep it awake; if it pauses between seasons, resume it from the
+  Supabase dashboard.
+- **Password emails:** members sign in with passwords their admin sets, so the app never
+  depends on Supabase sending email. (Supabase's built-in email is heavily rate-limited; add
+  your own SMTP in Supabase if you later want self-service password resets.)

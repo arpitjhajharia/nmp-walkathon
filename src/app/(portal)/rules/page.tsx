@@ -19,7 +19,7 @@ function Block({ id, title, children }: { id: string; title: string; children: R
 
 export default async function RulesPage() {
   await requireUser();
-  const { season: s } = getPortal();
+  const { season: s } = await getPortal();
   const cfg = s.settings;
   const bands = sortedBands(cfg.bands);
   const max = s.maxDaily;

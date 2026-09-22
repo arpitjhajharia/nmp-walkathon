@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Standings" };
 
 export default async function StandingsPage() {
   const user = await requireUser();
-  const { season: s } = getPortal();
+  const { season: s } = await getPortal();
   const teams = new Map(s.teams.map((t) => [t.id, t]));
   const last = s.lastCompletedWeek;
   const live = s.fixtures.filter((f) => f.status === "live");

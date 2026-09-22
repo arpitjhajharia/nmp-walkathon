@@ -20,7 +20,7 @@ const AWARDS: { key: keyof Omit<WeeklyAwards, "weekIndex" | "final">; label: str
 
 export default async function AwardsPage() {
   const user = await requireUser();
-  const { season: s, nameOf } = getPortal();
+  const { season: s, nameOf } = await getPortal();
   const teams = new Map(s.teams.map((t) => [t.id, t]));
   const final = s.weeklyAwards.filter((a) => a.final);
   const latest = final[final.length - 1];

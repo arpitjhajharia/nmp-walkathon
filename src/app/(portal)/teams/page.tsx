@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Teams" };
 
 export default async function TeamsPage() {
   const user = await requireUser();
-  const { season: s, nameOf } = getPortal();
+  const { season: s, nameOf } = await getPortal();
   return (
     <>
       <PageHeader eyebrow={`${s.teams.length} teams · ${s.participants.length} walkers`} title="Teams" />

@@ -8,9 +8,7 @@ import { getSettings, listTeams, listUsers } from "@/lib/server/data";
 import { AddMemberForm, ResetPasswordForm } from "./member-forms";
 
 export default async function TeamsAdmin({ searchParams }: PageProps<"/admin/teams">) {
-  const teams = listTeams();
-  const users = listUsers();
-  const settings = getSettings();
+  const [teams, users, settings] = await Promise.all([listTeams(), listUsers(), getSettings()]);
   const unassigned = users.filter((u) => !u.teamId);
 
   return (

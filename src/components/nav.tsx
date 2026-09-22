@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Footprints,
   Home,
+  KeyRound,
   LayoutList,
   LogOut,
   Medal,
@@ -38,6 +39,8 @@ const BASE: Item[] = [
   { href: "/rules", label: "Rules", icon: BookOpen },
 ];
 
+const ACCOUNT: Item = { href: "/account", label: "Account", icon: KeyRound };
+
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -65,6 +68,7 @@ export function Nav({
     ...(canEnter ? [{ href: "/entry", label: "Enter steps", icon: PencilLine }] : []),
     ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: Settings }] : []),
   ];
+  const menuItems = [...items, ACCOUNT];
   const bottom: Item[] = [
     BASE[0],
     BASE[1],
@@ -144,7 +148,7 @@ export function Nav({
             </div>
             <nav aria-label="All sections" className="flex-1 overflow-y-auto p-2">
               <ul>
-                {items.map((it) => (
+                {menuItems.map((it) => (
                   <li key={it.href}>
                     <Link
                       href={it.href}
@@ -160,7 +164,13 @@ export function Nav({
                 ))}
               </ul>
             </nav>
-            <form action={signOut} className="border-t border-line p-3">
+            <form
+              action={async () => {
+                await signOut();
+                window.location.assign("/login");
+              }}
+              className="border-t border-line p-3"
+            >
               <button type="submit" className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-semibold text-ink-2 hover:bg-line-2">
                 <LogOut className="size-5 text-muted" aria-hidden="true" />
                 Sign out

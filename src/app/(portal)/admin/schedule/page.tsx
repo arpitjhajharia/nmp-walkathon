@@ -9,7 +9,7 @@ import { CHALLENGE_TYPES } from "@/lib/engine/engine";
 import { getPortal } from "@/lib/server/season";
 
 export default async function ScheduleAdmin({ searchParams }: PageProps<"/admin/schedule">) {
-  const { season: s } = getPortal();
+  const { season: s } = await getPortal();
   const teams = new Map(s.teams.map((t) => [t.id, t]));
   const first = s.teams[0];
   const canPair = s.teams.length === 4;

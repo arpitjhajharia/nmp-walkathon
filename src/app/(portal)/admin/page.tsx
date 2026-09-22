@@ -11,8 +11,8 @@ import { getPortal } from "@/lib/server/season";
 
 export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
   const sp = await searchParams;
-  const { season: s, nameOf } = getPortal();
-  const pending = correctionRequests("pending");
+  const { season: s, nameOf } = await getPortal();
+  const pending = await correctionRequests("pending");
   const completed = s.weeks.filter((w) => w.status === "completed");
   const weekParam = Number(sp.week);
   const recapWeek = Number.isInteger(weekParam) && s.weeks[weekParam - 1] ? s.weeks[weekParam - 1] : completed[completed.length - 1];

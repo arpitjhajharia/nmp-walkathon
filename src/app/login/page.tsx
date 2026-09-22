@@ -5,18 +5,23 @@ import { demoSignIn } from "@/app/actions/auth";
 import { TeamIcon } from "@/components/team";
 import { DEMO_PASSWORD } from "@/lib/engine/demo";
 import { currentUser } from "@/lib/server/auth";
-import { isDemoMode } from "@/lib/server/db";
-import { getSettings, listTeams, listUsers } from "@/lib/server/data";
+import { activeSeason, loadTeams, loadUsers, settingsOf } from "@/lib/server/repo";
+import { createAdminClient, hasServiceKey } from "@/lib/supabase/admin";
+import { isDemoMode } from "@/lib/supabase/env";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Sign in" };
 
 export default async function LoginPage() {
   if (await currentUser()) redirect("/");
-  const settings = getSettings();
-  const demo = isDemoMode();
-  const teams = listTeams();
-  const users = demo ? listUsers() : [];
+  // Signed-out visitors can't read the database, so the welcome panel uses the server key
+  // for just the season name and team names (and demo accounts in demo mode).
+  const service = hasServiceKey() ? createAdminClient() : null;
+  const seasonRow = service ? await activeSeason(service) : null;
+  const settings = seasonRow ? settingsOf(seasonRow) : null;
+  const demo = isDemoMode() && Boolean(seasonRow);
+  const teams = service && seasonRow ? await loadTeams(service, seasonRow.id) : [];
+  const users = demo && service && seasonRow ? await loadUsers(service, seasonRow.id) : [];
   const admin = users.find((u) => u.isAdmin);
   const leads = teams.map((t) => ({ team: t, user: users.find((u) => u.id === t.leadUserId) })).filter((x) => x.user);
   const participant = users.find((u) => u.teamId && !teams.some((t) => t.leadUserId === u.id));
@@ -31,8 +36,8 @@ export default async function LoginPage() {
           <span className="font-display text-2xl font-bold uppercase tracking-wide">Walkathon</span>
         </div>
         <div className="my-10 max-w-lg">
-          <p className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-accent">{settings.lengthDays}-day season</p>
-          <h1 className="mt-2 font-display text-5xl font-bold uppercase leading-[0.95] sm:text-6xl">{settings.seasonName}</h1>
+          <p className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-accent">{settings ? `${settings.lengthDays}-day season` : "Office walking league"}</p>
+          <h1 className="mt-2 font-display text-5xl font-bold uppercase leading-[0.95] sm:text-6xl">{settings?.seasonName ?? "Walkathon"}</h1>
           <p className="mt-4 text-lg text-white/75">Four teams, weekly fixtures, one league table. Every day at 5,000 steps or more earns your team a point.</p>
         </div>
         <ul className="flex flex-wrap gap-3" aria-label="Teams">

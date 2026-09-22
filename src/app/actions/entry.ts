@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { isValidISODate } from "@/lib/engine/dates";
 import { requireUser } from "@/lib/server/auth";
-import { editPermission, findUser, listTeams, listUsers, requestCorrection, saveDay, type DayRowInput } from "@/lib/server/data";
+import { editPermission, findUser, listTeams, requestCorrection, saveDay, type DayRowInput } from "@/lib/server/data";
+import { getPortal } from "@/lib/server/season";
 import { pushToSheets, sheetsEnabled } from "@/lib/server/sheets";
 
 export interface SaveState {
@@ -18,10 +19,10 @@ export async function saveEntries(_prev: SaveState | null, formData: FormData): 
   const teamId = String(formData.get("teamId") ?? "");
   const date = String(formData.get("date") ?? "");
   if (!isValidISODate(date)) return { ok: false, message: "That date isn't valid." };
-  const perm = editPermission(user, teamId, date);
+  const perm = await editPermission(user, teamId, date);
   if (!perm.editable) return { ok: false, message: perm.reason };
 
-  const members = listUsers().filter((u) => u.teamId === teamId && u.active);
+  const members = (await getPortal()).season.rosterOn(teamId, date);
   const rows: DayRowInput[] = [];
   const errors: Record<string, string> = {};
   for (const m of members) {
@@ -44,17 +45,17 @@ export async function saveEntries(_prev: SaveState | null, formData: FormData): 
   if (Object.keys(errors).length) return { ok: false, message: "Please fix the highlighted rows.", errors };
 
   try {
-    const { changed, saved } = saveDay(user, teamId, date, rows);
+    const { changed } = await saveDay(teamId, date, rows);
     revalidatePath("/", "layout");
     if (changed > 0 && sheetsEnabled()) {
-      const team = listTeams().find((t) => t.id === teamId)?.name ?? "";
-      void pushToSheets(
-        "entries",
-        saved.map((r) => {
-          const u = findUser(r.userId);
-          return { date: r.date, name: u?.name, email: u?.email, team, steps: r.steps ?? "", onLeave: r.leave ? "yes" : "", updatedBy: user.name, updatedAt: new Date().toISOString() };
+      const team = (await listTeams()).find((t) => t.id === teamId)?.name ?? "";
+      const sheetRows = await Promise.all(
+        rows.map(async (r) => {
+          const u = await findUser(r.userId);
+          return { date, name: u?.name, email: u?.email, team, steps: r.steps ?? "", onLeave: r.leave ? "yes" : "", updatedBy: user.name, updatedAt: new Date().toISOString() };
         }),
       );
+      await pushToSheets("entries", sheetRows);
     }
     const time = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     return {
@@ -76,7 +77,11 @@ export async function submitCorrectionRequest(_prev: SaveState | null, formData:
   if (user.leadTeamId !== teamId) return { ok: false, message: "Only the team lead can request a correction." };
   if (!isValidISODate(date)) return { ok: false, message: "That date isn't valid." };
   if (reason.length < 5) return { ok: false, message: "Please add a short reason so the admin knows what to fix." };
-  requestCorrection(user, teamId, date, reason.slice(0, 500));
+  try {
+    await requestCorrection(user, teamId, date, reason.slice(0, 500));
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not send the request." };
+  }
   revalidatePath("/admin", "layout");
   return { ok: true, message: "Request sent. You'll be able to edit this date once an admin unlocks it." };
 }

@@ -20,7 +20,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/lead
   const user = await requireUser();
   const sp = await searchParams;
   const tab: TabId = TABS.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "total";
-  const { season: s, nameOf } = getPortal();
+  const { season: s, nameOf } = await getPortal();
   const teams = new Map(s.teams.map((t) => [t.id, t]));
   const rows: LeaderRow[] = s.leaderboards[tab];
   const meta = TABS.find((t) => t.id === tab)!;

@@ -3,36 +3,35 @@ import { Card, EmptyState } from "@/components/ui";
 import { auditLog } from "@/lib/server/data";
 import { getPortal } from "@/lib/server/season";
 
-const FILTERS = [
+const FILTERS: { id: string; label: string; entities?: string[] }[] = [
   { id: "all", label: "Everything" },
-  { id: "step_entry", label: "Step entries" },
-  { id: "correction_request", label: "Corrections" },
-  { id: "date_lock", label: "Locks" },
-  { id: "user", label: "Members" },
-  { id: "season", label: "Settings" },
+  { id: "step_entry", label: "Step entries", entities: ["step_entry", "step_entries", "leave_records"] },
+  { id: "correction_request", label: "Corrections", entities: ["correction_request"] },
+  { id: "date_lock", label: "Locks", entities: ["date_lock"] },
+  { id: "user", label: "Members", entities: ["user", "team"] },
+  { id: "season", label: "Settings", entities: ["season", "fixtures", "weekly_challenge", "demo"] },
 ];
 
-function describe(value: string | null): string {
-  if (!value) return "–";
-  try {
-    const v = JSON.parse(value);
-    if (v && typeof v === "object" && "steps" in v && "leave" in v) return v.leave ? "On leave" : v.steps === null ? "Not entered" : `${Number(v.steps).toLocaleString("en-US")} steps`;
-    const s = JSON.stringify(v);
-    return s.length > 80 ? `${s.slice(0, 80)}…` : s;
-  } catch {
-    return value;
+function describe(v: unknown, entity: string): string {
+  if (v === null || v === undefined) return "–";
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (entity === "leave_records") return "On leave";
+    if ("steps" in o) return o.leave ? "On leave" : o.steps === null ? "Not entered" : `${Number(o.steps).toLocaleString("en-US")} steps`;
   }
+  const s = JSON.stringify(v);
+  return s.length > 80 ? `${s.slice(0, 80)}…` : s;
 }
 
 export default async function AuditPage({ searchParams }: PageProps<"/admin/audit">) {
   const sp = await searchParams;
   const filter = FILTERS.some((f) => f.id === sp.entity) ? String(sp.entity) : "all";
-  const { season: s, nameOf } = getPortal();
-  const rows = auditLog(200, filter === "all" ? undefined : filter);
+  const { season: s, nameOf } = await getPortal();
+  const rows = await auditLog(200, FILTERS.find((f) => f.id === filter)?.entities);
   const tz = s.settings.timezone;
-  const when = (iso: string) => new Date(iso.endsWith("Z") ? iso : `${iso.replace(" ", "T")}Z`).toLocaleString("en-GB", { timeZone: tz, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: tz, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const subject = (entity: string, key: string) => {
-    if (entity === "step_entry" || entity === "leave") {
+    if (entity === "step_entry" || entity === "step_entries" || entity === "leave_records") {
       const [userId, date] = key.split("|");
       return `${nameOf(userId)} · ${date}`;
     }
@@ -67,8 +66,8 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
                     <span className="font-semibold capitalize">{r.action.replace("_", " ")}</span> {r.entity.replace("_", " ")}
                     <span className="block text-xs text-muted">{r.note ?? subject(r.entity, r.entityKey)}</span>
                   </td>
-                  <td className="px-3 py-2 text-muted">{describe(r.before)}</td>
-                  <td className="px-4 py-2">{describe(r.after)}</td>
+                  <td className="px-3 py-2 text-muted">{describe(r.before, r.entity)}</td>
+                  <td className="px-4 py-2">{describe(r.after, r.entity)}</td>
                 </tr>
               ))}
             </tbody>

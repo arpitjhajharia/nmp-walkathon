@@ -10,14 +10,14 @@ import { getPortal } from "@/lib/server/season";
 
 export async function generateMetadata({ params }: PageProps<"/teams/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const t = getPortal().season.teams.find((x) => x.slug === slug);
+  const t = (await getPortal()).season.teams.find((x) => x.slug === slug);
   return { title: t?.name ?? "Team" };
 }
 
 export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
   const user = await requireUser();
   const { slug } = await params;
-  const { season: s, nameOf } = getPortal();
+  const { season: s, nameOf } = await getPortal();
   const team = s.teams.find((t) => t.slug === slug);
   if (!team) notFound();
   const teams = new Map(s.teams.map((t) => [t.id, t]));

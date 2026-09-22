@@ -6,7 +6,7 @@ import { getPortal } from "@/lib/server/season";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const { season } = getPortal();
+  const { season } = await getPortal();
   const leadTeam = season.teams.find((t) => t.id === user.leadTeamId);
   const roleLabel = [user.isAdmin ? "Admin" : null, leadTeam ? `Team lead · ${leadTeam.name}` : null].filter(Boolean).join(" · ") || "Participant";
   const dayLabel =

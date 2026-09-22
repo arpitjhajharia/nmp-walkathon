@@ -15,18 +15,21 @@ import {
   listUsers,
   regenerateFixtures,
   removeLeave,
-  seedDemo,
   setChallenge,
   setDateUnlocked,
   setPassword,
+  temporaryPassword,
   setWeekPairing,
   updateMember,
   updateSettings,
   updateTeam,
 } from "@/lib/server/data";
-import { isDemoMode } from "@/lib/server/db";
-import { temporaryPassword } from "@/lib/server/passwords";
+import { seedDemo } from "@/lib/server/seed";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isDemoMode } from "@/lib/supabase/env";
 import { pushToSheets } from "@/lib/server/sheets";
+
+const errText = (e: unknown, fallback = "Something went wrong.") => (e instanceof Error ? e.message : fallback);
 
 function done(path: string, message: string, tone: "ok" | "err" = "ok"): never {
   revalidatePath("/", "layout");
@@ -42,8 +45,8 @@ const int = (f: FormData, k: string) => {
 // ───────── Season ─────────
 
 export async function saveSeason(formData: FormData) {
-  const admin = await requireAdmin();
-  const prev = getSettings();
+  await requireAdmin();
+  const prev = await getSettings();
   const bands: Band[] = [];
   for (let i = 0; i < 8; i++) {
     if (!formData.has(`band_min_${i}`)) break;
@@ -81,22 +84,31 @@ export async function saveSeason(formData: FormData) {
   if (numbers.some((n) => Number.isNaN(n) || n < 0)) done("/admin/season", "Numbers must be whole numbers, 0 or more.", "err");
   if (next.lengthDays < 7 || next.lengthDays > 366) done("/admin/season", "A season must be between 7 and 366 days.", "err");
   if (next.finalSprintDays < 1 || next.finalSprintDays > next.lengthDays) done("/admin/season", "The Final Sprint must fit inside the season.", "err");
-  updateSettings(admin.id, next);
-  done("/admin/season", prev.startDate !== next.startDate || prev.lengthDays !== next.lengthDays ? "Settings saved. The fixture schedule was rebuilt for the new dates." : "Settings saved. Scores recalculated.");
+  let rebuilt = false;
+  try {
+    rebuilt = (await updateSettings(next)).rebuiltFixtures;
+  } catch (e) {
+    done("/admin/season", errText(e), "err");
+  }
+  done("/admin/season", rebuilt ? "Settings saved. The fixture schedule was rebuilt for the new dates." : "Settings saved. Scores recalculated.");
 }
 
 // ───────── Teams & members ─────────
 
 export async function saveTeam(formData: FormData) {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const teamId = str(formData, "teamId");
   const name = str(formData, "name");
   const color = str(formData, "color");
   if (!name) done("/admin/teams", "A team needs a name.", "err");
   if (!/^#[0-9a-f]{6}$/i.test(color)) done("/admin/teams", "Pick a team colour.", "err");
   const lead = str(formData, "leadUserId") || null;
-  if (lead && listUsers().find((u) => u.id === lead)?.teamId !== teamId) done("/admin/teams", "The team lead must be a member of the team.", "err");
-  updateTeam(admin.id, teamId, { name, color, icon: str(formData, "icon"), leadUserId: lead });
+  if (lead && (await listUsers()).find((u) => u.id === lead)?.teamId !== teamId) done("/admin/teams", "The team lead must be a member of the team.", "err");
+  try {
+    await updateTeam(teamId, { name, color, icon: str(formData, "icon"), leadUserId: lead });
+  } catch (e) {
+    done("/admin/teams", errText(e), "err");
+  }
   done("/admin/teams", `${name} saved.`);
 }
 
@@ -107,14 +119,19 @@ export interface MemberState {
 }
 
 export async function createMember(_prev: MemberState | null, formData: FormData): Promise<MemberState> {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const name = str(formData, "name");
   const email = str(formData, "email").toLowerCase();
   if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, message: "Enter a name and a valid work email." };
   const domain = process.env.ALLOWED_EMAIL_DOMAIN;
   if (domain && !email.endsWith(`@${domain.toLowerCase()}`)) return { ok: false, message: `Use an @${domain} email address.` };
-  if (listUsers().some((u) => u.email.toLowerCase() === email)) return { ok: false, message: "Someone already uses that email." };
-  const { password } = addMember(admin.id, { name, email, teamId: str(formData, "teamId") || null, isAdmin: formData.get("isAdmin") === "on" });
+  if ((await listUsers()).some((u) => u.email.toLowerCase() === email)) return { ok: false, message: "Someone already uses that email." };
+  let password: string;
+  try {
+    ({ password } = await addMember({ name, email, teamId: str(formData, "teamId") || null, isAdmin: formData.get("isAdmin") === "on" }));
+  } catch (e) {
+    return { ok: false, message: errText(e) };
+  }
   revalidatePath("/", "layout");
   return { ok: true, message: `${name} added. Share this temporary password with them privately:`, password };
 }
@@ -126,37 +143,49 @@ export async function saveMember(formData: FormData) {
   const email = str(formData, "email");
   if (!name || !email.includes("@")) done("/admin/teams", "A member needs a name and email.", "err");
   if (userId === admin.id && formData.get("isAdmin") !== "on") done("/admin/teams", "You can't remove your own admin access.", "err");
-  updateMember(admin.id, userId, {
-    name,
-    email,
-    teamId: str(formData, "teamId") || null,
-    isAdmin: formData.get("isAdmin") === "on",
-    active: formData.get("active") === "on",
-  });
+  if (userId === admin.id && formData.get("active") !== "on") done("/admin/teams", "You can't deactivate your own account.", "err");
+  try {
+    await updateMember(userId, {
+      name,
+      email,
+      teamId: str(formData, "teamId") || null,
+      isAdmin: formData.get("isAdmin") === "on",
+      active: formData.get("active") === "on",
+    });
+  } catch (e) {
+    done("/admin/teams", errText(e), "err");
+  }
   done("/admin/teams", `${name} saved.`);
 }
 
 export async function resetPassword(_prev: MemberState | null, formData: FormData): Promise<MemberState> {
-  const admin = await requireAdmin();
-  const userId = str(formData, "userId");
+  await requireAdmin();
   const password = temporaryPassword();
-  setPassword(admin.id, userId, password);
-  return { ok: true, message: "New temporary password (they'll be signed out everywhere):", password };
+  try {
+    await setPassword(str(formData, "userId"), password);
+  } catch (e) {
+    return { ok: false, message: errText(e) };
+  }
+  return { ok: true, message: "New temporary password. They can change it under Account after signing in:", password };
 }
 
 // ───────── Fixtures & challenges ─────────
 
 export async function rebuildSchedule() {
-  const admin = await requireAdmin();
-  regenerateFixtures(admin.id);
+  await requireAdmin();
+  try {
+    await regenerateFixtures();
+  } catch (e) {
+    done("/admin/schedule", errText(e), "err");
+  }
   done("/admin/schedule", "Schedule regenerated. Results recalculated from the new pairings.");
 }
 
 export async function savePairing(formData: FormData) {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const week = int(formData, "weekIndex");
   try {
-    setWeekPairing(admin.id, week, str(formData, "opponentId"));
+    await setWeekPairing(week, str(formData, "opponentId"));
   } catch (e) {
     done("/admin/schedule", e instanceof Error ? e.message : "Could not update that week.", "err");
   }
@@ -164,10 +193,14 @@ export async function savePairing(formData: FormData) {
 }
 
 export async function saveChallenge(formData: FormData) {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const week = int(formData, "weekIndex");
   const type = str(formData, "type");
-  setChallenge(admin.id, week, type && type in CHALLENGE_TYPES ? (type as ChallengeType) : null);
+  try {
+    await setChallenge(week, type && type in CHALLENGE_TYPES ? (type as ChallengeType) : null);
+  } catch (e) {
+    done("/admin/schedule", errText(e), "err");
+  }
   done("/admin/schedule", `Week ${week + 1} challenge ${type ? "set" : "removed"}.`);
 }
 
@@ -177,26 +210,42 @@ export async function unlockDate(formData: FormData) {
   const admin = await requireAdmin();
   const date = str(formData, "date");
   if (!isValidISODate(date)) done("/admin/data", "Choose a date to unlock.", "err");
-  setDateUnlocked(admin.id, date, str(formData, "teamId") || "*", true);
+  try {
+    await setDateUnlocked(admin.id, date, str(formData, "teamId") || "*", true);
+  } catch (e) {
+    done("/admin/data", errText(e), "err");
+  }
   done("/admin/data", "Date unlocked for corrections.");
 }
 
 export async function lockDate(formData: FormData) {
   const admin = await requireAdmin();
-  setDateUnlocked(admin.id, str(formData, "date"), str(formData, "teamId") || "*", false);
+  try {
+    await setDateUnlocked(admin.id, str(formData, "date"), str(formData, "teamId") || "*", false);
+  } catch (e) {
+    done("/admin/data", errText(e), "err");
+  }
   done("/admin/data", "Date locked again.");
 }
 
 export async function decideRequest(formData: FormData) {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const approve = str(formData, "decision") === "approve";
-  decideCorrection(admin.id, str(formData, "id"), approve);
+  try {
+    await decideCorrection(str(formData, "id"), approve);
+  } catch (e) {
+    done("/admin/data", errText(e), "err");
+  }
   done("/admin/data", approve ? "Approved: the date is unlocked for that team." : "Request declined.");
 }
 
 export async function deleteLeave(formData: FormData) {
-  const admin = await requireAdmin();
-  removeLeave(admin.id, str(formData, "userId"), str(formData, "date"));
+  await requireAdmin();
+  try {
+    await removeLeave(str(formData, "userId"), str(formData, "date"));
+  } catch (e) {
+    done("/admin/data", errText(e), "err");
+  }
   done("/admin/data", "Leave removed. That day now counts as a normal day for the member.");
 }
 
@@ -232,7 +281,7 @@ function parseCsv(text: string): string[][] {
 }
 
 export async function importCsv(_prev: ImportState | null, formData: FormData): Promise<ImportState> {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { ok: false, message: "Choose a CSV file first." };
   if (file.size > 2_000_000) return { ok: false, message: "That file is too large (2 MB max)." };
@@ -244,26 +293,28 @@ export async function importCsv(_prev: ImportState | null, formData: FormData): 
   const iSteps = col(["steps"]);
   const iLeave = col(["on_leave", "leave"]);
   if (iDate < 0 || iEmail < 0 || iSteps < 0) return { ok: false, message: "The CSV needs date, email and steps columns (on_leave is optional)." };
-  const result = importRows(
-    { ...admin },
+  const result = await importRows(
     rows.map((r) => ({ date: (r[iDate] ?? "").trim(), email: (r[iEmail] ?? "").trim(), steps: r[iSteps] ?? "", leave: iLeave >= 0 ? r[iLeave] ?? "" : "" })),
   );
   revalidatePath("/", "layout");
-  if (result.errors.length) return { ok: false, message: "Nothing was imported. Please fix these rows and try again:", errors: result.errors.slice(0, 20) };
+  if (result.errors.length && result.imported === 0) return { ok: false, message: "Nothing was imported. Please fix these rows and try again:", errors: result.errors.slice(0, 20) };
+  if (result.errors.length) return { ok: false, message: `Imported ${result.imported} changes, but some days were refused:`, errors: result.errors.slice(0, 20) };
   return { ok: true, message: `Imported ${result.imported} change${result.imported === 1 ? "" : "s"}. Everything has been recalculated.` };
 }
 
 export async function syncSheets() {
   await requireAdmin();
-  const res = await pushToSheets("full", exportRows());
+  const res = await pushToSheets("full", await exportRows());
   done("/admin/data", res.message, res.ok ? "ok" : "err");
 }
 
 export async function resetDemo() {
-  const admin = await requireAdmin();
+  await requireAdmin();
   if (!isDemoMode()) done("/admin/data", "Reset is only available in demo mode.", "err");
-  void admin;
-  seedDemo();
-  revalidatePath("/", "layout");
-  redirect("/login");
+  try {
+    await seedDemo(createAdminClient());
+  } catch (e) {
+    done("/admin/data", errText(e), "err");
+  }
+  done("/admin", "Demo data reset. Everything is dated around today again.");
 }
