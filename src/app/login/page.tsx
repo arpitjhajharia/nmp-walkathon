@@ -16,12 +16,22 @@ export default async function LoginPage() {
   if (await currentUser()) redirect("/");
   // Signed-out visitors can't read the database, so the welcome panel uses the server key
   // for just the season name and team names (and demo accounts in demo mode).
-  const service = hasServiceKey() ? createAdminClient() : null;
-  const seasonRow = service ? await activeSeason(service) : null;
+  // If the key is missing or wrong, still show the sign-in form (just without the extras).
+  let seasonRow: Awaited<ReturnType<typeof activeSeason>> = null;
+  let teams: Awaited<ReturnType<typeof loadTeams>> = [];
+  let users: Awaited<ReturnType<typeof loadUsers>> = [];
+  try {
+    const service = hasServiceKey() ? createAdminClient() : null;
+    seasonRow = service ? await activeSeason(service) : null;
+    if (service && seasonRow) {
+      teams = await loadTeams(service, seasonRow.id);
+      if (isDemoMode()) users = await loadUsers(service, seasonRow.id);
+    }
+  } catch (err) {
+    console.error("[login] couldn't load season details. Check SUPABASE_SECRET_KEY / SUPABASE_SERVICE_ROLE_KEY.", err);
+  }
   const settings = seasonRow ? settingsOf(seasonRow) : null;
-  const demo = isDemoMode() && Boolean(seasonRow);
-  const teams = service && seasonRow ? await loadTeams(service, seasonRow.id) : [];
-  const users = demo && service && seasonRow ? await loadUsers(service, seasonRow.id) : [];
+  const demo = isDemoMode() && users.length > 0;
   const admin = users.find((u) => u.isAdmin);
   const leads = teams.map((t) => ({ team: t, user: users.find((u) => u.id === t.leadUserId) })).filter((x) => x.user);
   const participant = users.find((u) => u.teamId && !teams.some((t) => t.leadUserId === u.id));

@@ -15,7 +15,7 @@ export function supabasePublicKey(): string {
 
 /** Server-only. Never import this from client components. */
 export function supabaseServiceKey(): string | null {
-  return process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? null;
+  return process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || null;
 }
 
 export function isDemoMode(): boolean {
