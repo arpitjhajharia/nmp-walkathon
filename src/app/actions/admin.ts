@@ -27,9 +27,10 @@ import {
 import { seedDemo } from "@/lib/server/seed";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/env";
+import { safeMessage } from "@/lib/server/redact";
 import { describeSync, syncFromSheet } from "@/lib/server/sheet-sync";
 
-const errText = (e: unknown, fallback = "Something went wrong.") => (e instanceof Error ? e.message : fallback);
+const errText = safeMessage;
 
 function done(path: string, message: string, tone: "ok" | "err" = "ok"): never {
   revalidatePath("/", "layout");

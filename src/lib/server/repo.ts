@@ -6,6 +6,7 @@ import { isValidISODate, nowInTz, type ISODate } from "../engine/dates.ts";
 import { DEFAULT_SETTINGS } from "../engine/defaults.ts";
 import { computeSeason, type Season } from "../engine/engine.ts";
 import type { ChallengeType, Membership, Settings, Snapshot, Team } from "../engine/types.ts";
+import { redactSecrets } from "./redact.ts";
 
 /** A person in the competition. Emails aren't public; admins load them with loadContacts. */
 export interface UserRecord {
@@ -47,7 +48,7 @@ type Result<T> = { data: T | null; error: { message: string } | null };
 
 /** Throw on a Supabase error, otherwise return the data. */
 export function must<T>(res: Result<T>, what = "Database request"): T {
-  if (res.error) throw new Error(`${what} failed: ${res.error.message}`);
+  if (res.error) throw new Error(redactSecrets(`${what} failed: ${res.error.message}`));
   return res.data as T;
 }
 

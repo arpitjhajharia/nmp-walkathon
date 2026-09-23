@@ -14,7 +14,8 @@
     "check": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/check.ts",
     "backup": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/backup.ts",
     "sync:sheet": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/sync-sheet.ts",
-    "test:sheet": "node --experimental-strip-types --no-warnings src/lib/server/sheet.test.ts"
+    "test:sheet": "node --experimental-strip-types --no-warnings src/lib/server/sheet.test.ts",
+    "test:redact": "node --experimental-strip-types --no-warnings src/lib/server/redact.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
