@@ -11,7 +11,8 @@
     "test:db": "node --experimental-strip-types --no-warnings supabase/tests/rls.test.ts",
     "setup": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/setup.ts",
     "seed:demo": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/seed-demo.ts",
-    "check": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/check.ts"
+    "check": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/check.ts",
+    "backup": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/backup.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

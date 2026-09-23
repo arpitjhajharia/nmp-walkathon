@@ -36,7 +36,8 @@ npm run dev
 For a real season instead of demo data, set `ADMIN_EMAIL`, `ADMIN_PASSWORD` and `ADMIN_NAME`
 in `.env.local` and run `npm run setup`. It creates your admin account and an empty season
 with four placeholder teams starting next Monday. Then sign in, open **Admin**, set the
-dates, rename the teams, add the 20 members and choose each team's captain. To add another
+dates, add the teams, then **Admin → Fixtures & challenges → Regenerate schedule** to build
+the fixtures for them, add the 20 members and choose each team's captain. To add another
 admin, use **Make admin** on their row; they get a temporary password to change under **Account**.
 
 ### 3. Deploy to Vercel
@@ -59,6 +60,7 @@ demo admin sign-in and a **Reset demo data** button.
 | `npm run setup` | First-time admin account and empty season |
 | `npm run seed:demo` | Replace everything with demo data (asks first) |
 | `npm run check` | Check `.env.local` points at a set-up Supabase project |
+| `npm run backup` | Save every table to `backups/<timestamp>.json` |
 
 ## How it's built
 
@@ -159,9 +161,10 @@ See `.env.example`:
   (a paid Vercel feature).
 - **Dates and deadlines** use the season timezone (default `Asia/Kolkata`), both in the app and
   in the database rules.
-- **Backups:** Supabase's free tier has no automatic backups you can restore yourself. Use
-  **Admin → Data & corrections → Download all entries (CSV)** now and then, or turn on the
-  Google Sheets backup.
+- **Backups:** Supabase's free tier has no automatic backups you can restore yourself. Run
+  `npm run backup` (whole database to a JSON file, ignored by Git), use
+  **Admin → Data & corrections → Download all entries (CSV)**, or turn on the Google Sheets
+  backup.
 - **Free-tier pausing:** Supabase pauses free projects after a week with no activity. During the
   season, daily entries keep it awake; if it pauses between seasons, resume it from the
   Supabase dashboard.

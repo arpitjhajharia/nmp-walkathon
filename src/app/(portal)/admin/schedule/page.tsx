@@ -3,7 +3,7 @@ import { ConfirmSubmit, SubmitButton } from "@/components/client";
 import { inputCls } from "@/components/fields";
 import { Flash } from "@/components/flash";
 import { TeamBadge } from "@/components/team";
-import { Card, Chip, SectionTitle } from "@/components/ui";
+import { Card, Chip, Notice, SectionTitle } from "@/components/ui";
 import { formatRange } from "@/lib/engine/dates";
 import { CHALLENGE_TYPES } from "@/lib/engine/engine";
 import { getPortal } from "@/lib/server/season";
@@ -28,6 +28,14 @@ export default async function ScheduleAdmin({ searchParams }: PageProps<"/admin/
           <ConfirmSubmit message="Regenerate the whole schedule? Past results will be recalculated using the new pairings.">Regenerate schedule</ConfirmSubmit>
         </form>
       </Card>
+
+      {s.teams.length >= 2 && s.fixtures.length === 0 && (
+        <div className="mb-6">
+          <Notice tone="warn">
+            No fixtures yet. Click <strong>Regenerate schedule</strong> above to create them for {s.teams.length} teams. Do this after adding or renaming teams.
+          </Notice>
+        </div>
+      )}
 
       <SectionTitle title="Weeks" sub="Change a week's pairing or its optional challenge." />
       <ul className="space-y-3">
