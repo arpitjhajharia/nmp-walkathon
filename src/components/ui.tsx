@@ -17,18 +17,23 @@ export function PageHeader({ eyebrow, title, children }: { eyebrow?: string; tit
   );
 }
 
+/**
+ * Section headings sit one tier below the page title: display face, sentence case, on a
+ * hairline. Uppercase is reserved for the h1 and for labels that sit above a big number,
+ * so the numbers stay the loudest thing on a scoreboard.
+ */
 export function SectionTitle({ title, sub, action }: { title: string; sub?: React.ReactNode; action?: { href: string; label: string } }) {
   return (
-    <div className="mb-3 flex items-end justify-between gap-3">
-      <div className="min-w-0">
-        <h2 className="font-display text-xl font-bold uppercase tracking-wide text-ink">{title}</h2>
-        {sub && <p className="text-sm text-muted">{sub}</p>}
+    <div className="mb-4 border-b border-line pb-2">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="min-w-0 font-display text-2xl font-bold leading-tight tracking-tight text-ink">{title}</h2>
+        {action && (
+          <Link href={action.href} className="shrink-0 text-sm font-semibold text-night-3 hover:underline">
+            {action.label} →
+          </Link>
+        )}
       </div>
-      {action && (
-        <Link href={action.href} className="shrink-0 text-sm font-semibold text-night-3 hover:underline">
-          {action.label} →
-        </Link>
-      )}
+      {sub && <p className="mt-0.5 max-w-2xl text-sm text-muted">{sub}</p>}
     </div>
   );
 }
@@ -87,14 +92,14 @@ export function Progress({ value, max, color = "#0d1b2e", label }: { value: numb
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-line-2" role="progressbar" aria-label={label} aria-valuenow={value} aria-valuemin={0} aria-valuemax={max}>
-      <div className="h-full rounded-full transition-[width]" style={{ width: `${pct}%`, backgroundColor: color }} />
+      <div className="bar-fill h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
     </div>
   );
 }
 
 /** Rank movement: positive = moved up. */
 export function Movement({ value, unit = "" }: { value: number | null; unit?: string }) {
-  if (value === null) return <span className="text-xs text-muted">–</span>;
+  if (value === null) return <span className="text-xs text-muted">-</span>;
   if (value === 0)
     return (
       <span className="inline-flex items-center text-xs text-muted" title="No change">
@@ -121,7 +126,7 @@ const FORM_STYLE: Record<FormResult, string> = {
 const FORM_WORD: Record<FormResult, string> = { W: "Won", D: "Drew", L: "Lost" };
 
 export function FormGuide({ form }: { form: FormResult[] }) {
-  if (form.length === 0) return <span className="text-xs text-muted">–</span>;
+  if (form.length === 0) return <span className="text-xs text-muted">-</span>;
   return (
     <span className="inline-flex gap-1" aria-label={`Last ${form.length}: ${form.map((f) => FORM_WORD[f]).join(", ")}`}>
       {form.map((f, i) => (

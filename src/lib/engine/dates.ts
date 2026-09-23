@@ -78,13 +78,13 @@ export function formatShort(d: ISODate): string {
   return `${dt.getUTCDate()} ${MONTHS[dt.getUTCMonth()]}`;
 }
 
-/** "15–21 Sep" or "29 Sep – 5 Oct" */
+/** "15-21 Sep" or "29 Sep - 5 Oct" */
 export function formatRange(a: ISODate, b: ISODate): string {
   const da = parseISO(a);
   const db = parseISO(b);
   if (a === b) return formatShort(a);
-  if (da.getUTCMonth() === db.getUTCMonth()) return `${da.getUTCDate()}–${db.getUTCDate()} ${MONTHS[db.getUTCMonth()]}`;
-  return `${formatShort(a)} – ${formatShort(b)}`;
+  if (da.getUTCMonth() === db.getUTCMonth()) return `${da.getUTCDate()}-${db.getUTCDate()} ${MONTHS[db.getUTCMonth()]}`;
+  return `${formatShort(a)} - ${formatShort(b)}`;
 }
 
 export function monthName(key: string): string {

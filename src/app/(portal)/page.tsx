@@ -1,6 +1,7 @@
-import { Award, Footprints, Lightbulb, Medal, Sparkles, Target } from "lucide-react";
+import { Award, Crown, Footprints, Lightbulb, Medal, Target } from "lucide-react";
 import Link from "next/link";
 import { FixtureCard } from "@/components/fixture-card";
+import { CountUp } from "@/components/motion";
 import { StandingsTable } from "@/components/standings-table";
 import { TeamBadge, TeamIcon } from "@/components/team";
 import { Avatar, Card, Chip, EmptyState, Movement, Progress, SectionTitle, compact, fmt, joinNames } from "@/components/ui";
@@ -49,52 +50,68 @@ export default async function HomePage() {
 
   const lastWeek = s.lastCompletedWeek;
   const sprint = s.finalSprint;
-  const sprintLine =
-    sprint.status === "upcoming"
-      ? `Final Sprint in ${diffDays(s.today, sprint.start)} days`
-      : sprint.status === "live"
-        ? `Final Sprint: ${diffDays(s.today, sprint.end) + 1} days left`
-        : "Final Sprint complete";
   const pct = Math.round((s.dayNumber / s.settings.lengthDays) * 100);
 
+  // Each chip carries its own label, so nothing has to be joined into a run-on string.
+  const metrics: string[] =
+    s.phase === "pre"
+      ? [`Kick-off ${formatShort(s.start)}`, `${fmt(diffDays(s.today, s.start))} days to go`, `${s.teams.length} teams`]
+      : [
+          `Day ${fmt(s.dayNumber)} of ${s.settings.lengthDays}`,
+          `${fmt(s.daysRemaining)} days left`,
+          sprint.status === "upcoming"
+            ? `Final Sprint in ${diffDays(s.today, sprint.start)} days`
+            : sprint.status === "live"
+              ? `Final Sprint: ${diffDays(s.today, sprint.end) + 1} days left`
+              : "Final Sprint complete",
+        ];
+
   return (
-    <div className="space-y-8">
-      {/* The season at a glance. Where we are matters more than how long is left, so this is a strip. */}
-      <section className="overflow-hidden rounded-2xl bg-night px-5 py-4 text-white sm:px-6" aria-labelledby="season-title">
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+    <div className="space-y-10">
+      {/* The page-load moment: the band arrives, then the four teams land in order, their
+          bars grow to today's totals and the points tally up. One sequence, then the page
+          settles. Everything below reveals once, quietly, as you reach it. */}
+      <section className="enter overflow-hidden rounded-2xl bg-night px-5 py-4 text-white sm:px-6 sm:py-5" aria-labelledby="season-title">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="min-w-0">
-            <h1 id="season-title" className="font-display text-2xl font-bold uppercase leading-none sm:text-3xl">
+            <h1 id="season-title" className="font-display text-2xl font-bold uppercase leading-none tracking-tight sm:text-4xl">
               {s.settings.seasonName}
             </h1>
-            <p className="mt-1 text-sm text-white/70">
+            <p className="mt-1.5 text-sm text-white/65">
               {s.phase === "live" ? `Week ${week?.number} · ${formatDay(s.today)}` : s.phase === "pre" ? `Starts ${formatShort(s.start)}` : "Season complete"}
-              {scored && ` · scored to ${formatDay(s.lastCounted)}`}
             </p>
           </div>
-          <p className="tnum text-sm text-white/70">
-            {s.phase === "pre" ? (
-              `${diffDays(s.today, s.start)} days to kick-off`
-            ) : (
-              <>
-                Day <span className="font-display text-xl font-bold text-accent">{s.dayNumber}</span> of {s.settings.lengthDays} · {s.daysRemaining} left · {sprintLine}
-              </>
-            )}
-          </p>
+          <ul className="flex flex-wrap items-center gap-2">
+            {metrics.map((m) => (
+              <li key={m} className="tnum rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
+                {m}
+              </li>
+            ))}
+          </ul>
         </div>
+
         {s.phase !== "pre" && (
           <div
-            className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"
+            className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/15"
             role="progressbar"
             aria-label="Season progress"
             aria-valuenow={s.dayNumber}
             aria-valuemin={0}
             aria-valuemax={s.settings.lengthDays}
           >
-            <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+            <div className="bar-fill h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
           </div>
         )}
+
+        {scored && (
+          <p className="mt-4 flex items-start gap-2.5 text-[15px] font-medium leading-snug text-white">
+            <Lightbulb className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden="true" />
+            <span>{todayInsight(s)}</span>
+          </p>
+        )}
+
         {s.champion.length > 0 && (
-          <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-sm font-bold text-night">
+          <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-sm font-bold text-night">
             <Medal className="size-4" aria-hidden="true" /> Season Champion: {s.champion.map((id) => teams.get(id)!.name).join(" & ")}
           </p>
         )}
@@ -105,24 +122,30 @@ export default async function HomePage() {
         <div id="ranking-h">
           <SectionTitle
             title="Season rankings"
-            sub="Every point scored so far, the week in progress included. This moves every morning."
+            sub={scored ? `Every point scored so far, including the week in progress. Scored to ${formatDay(s.lastCounted)}.` : "Every point scored so far, including the week in progress."}
             action={{ href: "/teams", label: "Teams & players" }}
           />
         </div>
         {!scored ? (
-          <EmptyState title="Nothing scored yet">
-            {s.phase === "pre" ? "The first steps are scored the morning after day one." : "Day one is scored tomorrow morning."}
-          </EmptyState>
+          <EmptyState title="Nothing scored yet">{s.phase === "pre" ? "The first steps are scored the morning after day one." : "Day one is scored tomorrow morning."}</EmptyState>
         ) : (
           <ol className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {ranking.map((r) => (
-              <li key={r.team.id}>
+            {ranking.map((r, i) => (
+              <li key={r.team.id} className="enter" style={{ "--step": i + 1 } as React.CSSProperties}>
                 <Card as="article" className={`h-full overflow-hidden ${r.position === 1 ? "ring-2 ring-accent" : ""}`}>
                   <div className="h-1.5" style={{ backgroundColor: r.team.color }} />
                   <div className="p-4">
-                    <div className="flex items-center gap-2">
-                      <span className="tnum font-display text-3xl font-bold leading-none text-ink-2">{r.position}</span>
-                      <TeamBadge team={r.team} size="sm" link className="min-w-0" />
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="tnum font-display text-3xl font-bold leading-none text-ink-2">{r.position}</span>
+                        <TeamBadge team={r.team} size="sm" link className="min-w-0" />
+                      </div>
+                      {r.position === 1 && (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent px-1.5 py-1 text-[11px] font-bold text-night sm:px-2.5 sm:py-0.5">
+                          <Crown className="size-3.5" aria-hidden="true" />
+                          <span className="sr-only sm:not-sr-only">Leader</span>
+                        </span>
+                      )}
                     </div>
                     <p className="tnum mt-3 font-display text-4xl font-bold leading-none">{fmt(r.points)}</p>
                     <p className="mt-1 text-xs text-muted">team points · {compact(r.steps)} steps</p>
@@ -138,16 +161,16 @@ export default async function HomePage() {
       </section>
 
       {/* 2. This week's fixtures */}
-      <section aria-labelledby="fixtures-h">
+      <section className="reveal" aria-labelledby="fixtures-h">
         <div id="fixtures-h">
           <SectionTitle
             title={s.phase === "finished" ? "Final week" : "This week's fixtures"}
-            sub={week ? `Week ${week.number} · ${formatRange(week.start, week.end)} · Monday to Sunday team points` : undefined}
+            sub={week ? `Week ${week.number} · ${formatRange(week.start, week.end)}. Monday to Sunday team points.` : undefined}
             action={{ href: "/schedule", label: "Full schedule" }}
           />
         </div>
         {weekFixtures.length ? (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {weekFixtures.map((f) => (
               <FixtureCard key={f.id} f={f} teams={teams} />
             ))}
@@ -158,14 +181,11 @@ export default async function HomePage() {
       </section>
 
       {/* 3. League standings */}
-      <section aria-label="League standings">
-        <SectionTitle
-          title="League table"
-          sub={lastWeek ? `After week ${lastWeek.number} · ${formatRange(lastWeek.start, lastWeek.end)}` : "Fills in after the first week"}
-        />
+      <section className="reveal" aria-label="League standings">
+        <SectionTitle title="League table" sub={lastWeek ? `After week ${lastWeek.number} · ${formatRange(lastWeek.start, lastWeek.end)}` : "Fills in after the first week"} />
         {lastWeek?.provisional && (
-          <p className="mb-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-950 ring-1 ring-amber-200">
-            Week {lastWeek.number} results are provisional until corrections close tonight.
+          <p className="mb-3 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm text-ink-2">
+            <span className="font-semibold text-ink">Provisional.</span> Week {lastWeek.number} results can still change until corrections close tonight.
           </p>
         )}
         <Card className="p-0 sm:p-2">
@@ -180,13 +200,13 @@ export default async function HomePage() {
       </section>
 
       {/* 4. Player performance */}
-      <section aria-labelledby="players-h">
+      <section className="reveal" aria-labelledby="players-h">
         <div id="players-h">
           <SectionTitle title="Player performance" sub="Steps and points for the people behind the teams." action={{ href: "/teams?view=players", label: "All players" }} />
         </div>
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="lg:col-span-7">
-            <h3 className="mb-2 font-display text-sm font-bold uppercase tracking-wider text-ink-2">Top walkers</h3>
+            <h3 className="mb-2 font-display text-lg font-bold text-ink-2">Top walkers</h3>
             {!scored ? (
               <EmptyState title="No steps in yet" icon={<Footprints className="size-6" />} />
             ) : (
@@ -203,9 +223,7 @@ export default async function HomePage() {
                           <Link href={`/players/${r.userId}`} className="block truncate font-semibold hover:underline">
                             {nameOf(r.userId)}
                           </Link>
-                          <span className="block truncate text-xs text-muted">
-                            {[team?.name, st.currentStreak >= 3 ? `${st.currentStreak}-day streak` : null].filter(Boolean).join(" · ")}
-                          </span>
+                          <span className="block truncate text-xs text-muted">{[team?.name, st.currentStreak >= 3 ? `${st.currentStreak}-day streak` : null].filter(Boolean).join(" · ")}</span>
                         </span>
                         <span className="shrink-0 text-right">
                           <span className="tnum block font-display text-lg font-bold leading-tight">{fmt(st.totalSteps)}</span>
@@ -221,16 +239,17 @@ export default async function HomePage() {
                   })}
                 </ol>
                 <p className="border-t border-line-2 px-4 py-2.5 text-xs text-muted">
-                  Ranked by total steps. Points are what each person contributed to their team.{lastWeek && " Arrows show movement since last Sunday."}
+                  Ranked by total steps. Points are what each person contributed to their team.
+                  {lastWeek && " Arrows show movement since last Sunday."}
                 </p>
               </Card>
             )}
           </div>
 
           <div className="lg:col-span-5">
-            <h3 className="mb-2 flex items-end justify-between gap-3 font-display text-sm font-bold uppercase tracking-wider text-ink-2">
+            <h3 className="mb-2 flex items-end justify-between gap-3 font-display text-lg font-bold text-ink-2">
               Awards &amp; badges
-              <Link href="/awards" className="text-xs font-semibold normal-case tracking-normal text-night-3 hover:underline">
+              <Link href="/awards" className="pb-0.5 text-xs font-semibold text-night-3 hover:underline">
                 All awards →
               </Link>
             </h3>
@@ -247,7 +266,7 @@ export default async function HomePage() {
                   <div key={label} className="flex items-start gap-3 px-5 py-3">
                     <Award className="mt-0.5 size-4 shrink-0 text-accent-ink" aria-hidden="true" />
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
+                      <p className="text-xs font-semibold text-muted">{label}</p>
                       <p className="text-sm font-semibold text-ink">{winners.length ? joinNames(winners.map((w) => nameOf(w.userId).split(" ")[0])) : "Not awarded"}</p>
                       {winners[0] && <p className="text-xs text-muted">{winners[0].detail}</p>}
                     </div>
@@ -258,7 +277,7 @@ export default async function HomePage() {
               )}
               {recentBadges.length > 0 && (
                 <div className="px-5 py-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">New badges</p>
+                  <p className="mb-2 text-xs font-semibold text-muted">New badges</p>
                   <ul className="flex flex-wrap gap-2">
                     {recentBadges.map((b) => {
                       const team = teams.get(s.stats.get(b.userId)?.teamId ?? "");
@@ -279,7 +298,7 @@ export default async function HomePage() {
 
       <div className="grid gap-8 lg:grid-cols-2">
         {/* 5. The latest scored day */}
-        <section aria-label="Latest day">
+        <section className="reveal" aria-label="Latest day">
           <SectionTitle title="Latest day" sub={scored ? formatDay(s.lastCounted) : undefined} />
           <Card className="p-5">
             {!scored ? (
@@ -298,7 +317,9 @@ export default async function HomePage() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted">Steps recorded</p>
-                    <p className="tnum font-display text-4xl font-bold leading-none">{fmt(latestSteps)}</p>
+                    <p className="tnum font-display text-4xl font-bold leading-none">
+                      <CountUp value={latestSteps} />
+                    </p>
                   </div>
                 </div>
                 <div className="mt-3">
@@ -331,22 +352,25 @@ export default async function HomePage() {
         </section>
 
         {/* 6. Weekly challenge */}
-        <section aria-label="Weekly challenge">
+        <section className="reveal" aria-label="Weekly challenge">
           <SectionTitle title="Weekly challenge" sub="Optional, just for fun. It never changes league points." />
           {challenge ? (
             <Card className="p-5">
               <div className="flex items-start gap-3">
-                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-night/8 text-night-3">
                   <Target className="size-5" aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-display text-2xl font-bold uppercase leading-tight">{challenge.title}</p>
+                  <p className="font-display text-2xl font-bold leading-tight">{challenge.title}</p>
                   <p className="text-sm text-muted">{challenge.description}</p>
                 </div>
               </div>
-              <p className="mt-3 text-sm text-muted">
+              <p className="mt-4 text-sm text-muted">
                 <span className="tnum font-semibold text-ink">{challengeDone}</span> of {challenge.progress.length} people have completed it this week.
               </p>
+              <div className="mt-2">
+                <Progress value={challengeDone} max={challenge.progress.length || 1} label="People who have completed this week's challenge" />
+              </div>
             </Card>
           ) : (
             <EmptyState title="No challenge this week" icon={<Target className="size-6" />}>
@@ -356,18 +380,11 @@ export default async function HomePage() {
         </section>
       </div>
 
-      {/* 7. What matters today */}
-      <section aria-label="What matters today" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
-        <Lightbulb className="mt-0.5 size-5 shrink-0 text-amber-700" aria-hidden="true" />
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-amber-800">What matters today</p>
-          <p className="text-[15px] font-medium text-amber-950">{todayInsight(s)}</p>
-        </div>
-      </section>
-
       <p className="flex items-center justify-center gap-2 text-xs text-muted">
-        <Footprints className="size-3.5" aria-hidden="true" /> Walking regularly counts for more than big totals. <Link href="/rules" className="font-semibold underline">How scoring works</Link>
-        <Sparkles className="size-3.5" aria-hidden="true" />
+        <Footprints className="size-3.5" aria-hidden="true" /> Walking regularly counts for more than big totals.{" "}
+        <Link href="/rules" className="font-semibold underline">
+          How scoring works
+        </Link>
       </p>
     </div>
   );

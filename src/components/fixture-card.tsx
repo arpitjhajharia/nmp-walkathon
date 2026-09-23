@@ -42,7 +42,7 @@ function Row({ side, team, leading, f }: { side: FixtureSide; team: Team; leadin
           </p>
         )}
       </div>
-      <span className={`tnum font-display text-3xl font-bold leading-none ${leading ? "text-ink" : "text-muted"}`}>{f.status === "upcoming" ? "–" : side.points}</span>
+      <span className={`tnum font-display text-3xl font-bold leading-none ${leading ? "text-ink" : "text-muted"}`}>{f.status === "upcoming" ? "-" : side.points}</span>
     </div>
   );
 }
@@ -60,9 +60,9 @@ export function FixtureCard({ f, teams, highlightTeamId }: { f: FixtureResult; t
   return (
     <article className={`rounded-2xl border bg-surface p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${involved ? "border-night-3 ring-1 ring-night-3/30" : "border-line"}`} aria-label={summary}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="font-display text-sm font-semibold uppercase tracking-wider text-muted">
+        <p className="text-xs font-semibold text-muted">
           Week {f.week.number} · {formatRange(f.week.start, f.week.end)}
-          {f.week.finalSprint && <span className="ml-1.5 text-accent-ink">· Final Sprint</span>}
+          {f.week.finalSprint && <span className="ml-1.5 font-bold text-accent-ink">Final Sprint</span>}
         </p>
         <StatusChip f={f} />
       </div>

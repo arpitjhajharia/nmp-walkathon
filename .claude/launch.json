@@ -1,6 +1,29 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "walkathon", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--", "-p", "3100"], "port": 3100 }
+    {
+      "name": "walkathon",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3100"
+      ],
+      "port": 3100
+    },
+    {
+      "name": "walkathon-prod",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start",
+        "--",
+        "-p",
+        "3200"
+      ],
+      "port": 3200
+    }
   ]
 }

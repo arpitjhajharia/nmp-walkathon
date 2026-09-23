@@ -56,6 +56,61 @@ body {
   80%, 100% { transform: scale(2.6); opacity: 0; }
 }
 
+/* Motion.
+   The base state of everything here is its final, visible state; the animation only
+   supplies where it comes *from*. So a browser that never runs the transition, a tab
+   loaded in the background, or a machine with animations switched off still shows the
+   scoreboard immediately. Nothing waits on JavaScript either. */
+.bar-fill { transform-origin: left center; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The one orchestrated moment: the band lands, then the teams arrive in finishing order
+     and their bars run out to today's totals. `--step` sets each element's place in it. */
+  .enter {
+    opacity: 1;
+    transform: none;
+    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: calc(var(--step, 0) * 60ms);
+  }
+  .enter .bar-fill {
+    transform: scaleX(1);
+    transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: calc(var(--step, 0) * 60ms + 180ms);
+  }
+  @starting-style {
+    .enter {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    .enter .bar-fill {
+      transform: scaleX(0);
+    }
+  }
+
+  /* Below the fold, each section reveals once on the way past. Scroll-driven, so there is
+     no scroll listener and no per-frame work; browsers without it simply show the content. */
+  @supports (animation-timeline: view()) {
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: none; }
+    }
+    @keyframes grow {
+      from { transform: scaleX(0); }
+      to { transform: scaleX(1); }
+    }
+    .reveal {
+      animation: rise 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+      animation-timeline: view();
+      animation-range: entry 8% cover 20%;
+    }
+    .reveal .bar-fill {
+      animation: grow 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+      animation-timeline: view();
+      animation-range: entry 12% cover 28%;
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .live-dot::after { animation: none; }
   * { scroll-behavior: auto !important; transition: none !important; }
