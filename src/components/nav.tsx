@@ -7,7 +7,6 @@ import {
   Footprints,
   Home,
   KeyRound,
-  LayoutList,
   LogIn,
   LogOut,
   Menu,
@@ -28,7 +27,6 @@ interface Item {
 
 const BASE: Item[] = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/standings", label: "Standings", icon: LayoutList },
   { href: "/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/teams", label: "Teams & players", icon: Users },
   { href: "/awards", label: "Awards", icon: Award },
@@ -48,7 +46,7 @@ export function Nav({ adminName, dayLabel, signOut }: { adminName: string | null
   const closeRef = useRef<HTMLButtonElement>(null);
   const items: Item[] = [...BASE, ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: Settings }] : [])];
   const menuItems = isAdmin ? [...items, ACCOUNT] : items;
-  const bottom: Item[] = [BASE[0], BASE[1], BASE[2], { ...BASE[3], label: "Teams" }];
+  const bottom: Item[] = [BASE[0], BASE[1], { ...BASE[2], label: "Teams" }, BASE[3]];
 
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {

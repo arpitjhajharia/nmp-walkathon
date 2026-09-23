@@ -3,7 +3,7 @@ import Link from "next/link";
 import { FixtureCard } from "@/components/fixture-card";
 import { StandingsTable } from "@/components/standings-table";
 import { TeamBadge, TeamIcon } from "@/components/team";
-import { Card, Chip, EmptyState, Progress, SectionTitle, fmt, joinNames } from "@/components/ui";
+import { Card, Chip, EmptyState, Progress, SectionTitle, compact, fmt, joinNames } from "@/components/ui";
 import { diffDays, formatDay, formatRange, formatShort } from "@/lib/engine/dates";
 import { BADGES, todayInsight } from "@/lib/engine/engine";
 import { getPortal } from "@/lib/server/season";
@@ -29,6 +29,7 @@ export default async function HomePage() {
   const lastAwards = s.lastCompletedWeek ? s.weeklyAwards.find((a) => a.weekIndex === s.lastCompletedWeek!.index) : undefined;
   const recentBadges = s.badgeUnlocks.filter((b) => diffDays(b.date, s.today) <= 3 && b.badgeId !== "first_steps").slice(0, 5);
 
+  const lastWeek = s.lastCompletedWeek;
   const sprint = s.finalSprint;
   const sprintLine =
     sprint.status === "upcoming"
@@ -100,20 +101,48 @@ export default async function HomePage() {
         )}
       </section>
 
+      {/* 3. League standings */}
+      <section aria-label="League standings">
+        <SectionTitle
+          title="League table"
+          sub={lastWeek ? `After week ${lastWeek.number} · ${formatRange(lastWeek.start, lastWeek.end)}` : "Fills in after the first week"}
+        />
+        {lastWeek?.provisional && (
+          <p className="mb-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-950 ring-1 ring-amber-200">
+            Week {lastWeek.number} results are provisional until corrections close tonight.
+          </p>
+        )}
+        <Card className="p-0 sm:p-2">
+          <StandingsTable rows={s.standings} teams={teams} />
+        </Card>
+        <dl className="mt-3 grid gap-x-6 gap-y-1 text-xs text-muted sm:grid-cols-2">
+          <div><dt className="inline font-semibold text-ink-2">Ranking order: </dt><dd className="inline">league points, then fixtures won, then total activity points, then total steps.</dd></div>
+          <div><dt className="inline font-semibold text-ink-2">Form: </dt><dd className="inline">last five results, oldest first (W win, D draw, L loss).</dd></div>
+          <div><dt className="inline font-semibold text-ink-2">Activity pts: </dt><dd className="inline">all daily team points earned in completed weeks.</dd></div>
+          <div><dt className="inline font-semibold text-ink-2">Move: </dt><dd className="inline">change in position since the previous completed week.</dd></div>
+        </dl>
+      </section>
+
       <div className="grid gap-8 lg:grid-cols-12">
-        {/* 3. League standings */}
-        <section className="lg:col-span-7" aria-label="League standings">
-          <SectionTitle
-            title="League table"
-            sub={s.lastCompletedWeek ? `After week ${s.lastCompletedWeek.number}${s.lastCompletedWeek.provisional ? " (provisional until corrections close)" : ""}` : "Fills in after the first week"}
-            action={{ href: "/standings", label: "Full table" }}
-          />
-          <Card className="p-0 sm:p-1">
-            <StandingsTable rows={s.standings} teams={teams} />
-          </Card>
+        {/* 4. Season totals, which unlike the table count the week in progress */}
+        <section className="lg:col-span-7" aria-label="Season totals">
+          <SectionTitle title="Season totals" sub="Everything scored so far, including the current week." />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {s.teams.map((t) => {
+              const pts = s.countedDates.reduce((sum, d) => sum + s.teamDay(t.id, d).earned, 0);
+              const steps = s.countedDates.reduce((sum, d) => sum + s.teamDay(t.id, d).steps, 0);
+              return (
+                <Card key={t.id} className="p-4">
+                  <TeamBadge team={t} size="sm" link />
+                  <p className="tnum mt-3 font-display text-3xl font-bold">{fmt(pts)}</p>
+                  <p className="text-xs text-muted">team points · {compact(steps)} steps</p>
+                </Card>
+              );
+            })}
+          </div>
         </section>
 
-        {/* 4. The latest scored day */}
+        {/* 5. The latest scored day */}
         <section className="lg:col-span-5" aria-label="Latest day">
           <SectionTitle title="Latest day" sub={scored ? formatDay(s.lastCounted) : undefined} />
           <Card className="p-5">
@@ -167,7 +196,7 @@ export default async function HomePage() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        {/* 5. Weekly challenge */}
+        {/* 6. Weekly challenge */}
         <section aria-label="Weekly challenge">
           <SectionTitle title="Weekly challenge" sub="Optional, just for fun. It never changes league points." />
           {challenge ? (
@@ -192,7 +221,7 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* 6. Latest awards & badges */}
+        {/* 7. Latest awards & badges */}
         <section aria-label="Latest awards and badges">
           <SectionTitle title="Latest awards" sub={s.lastCompletedWeek ? `Week ${s.lastCompletedWeek.number}` : undefined} action={{ href: "/awards", label: "All awards" }} />
           <Card className="divide-y divide-line-2">
@@ -237,7 +266,7 @@ export default async function HomePage() {
         </section>
       </div>
 
-      {/* 7. What matters today */}
+      {/* 8. What matters today */}
       <section aria-label="What matters today" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
         <Lightbulb className="mt-0.5 size-5 shrink-0 text-amber-700" aria-hidden="true" />
         <div>

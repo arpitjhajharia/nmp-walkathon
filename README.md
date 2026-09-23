@@ -102,9 +102,10 @@ scripts/               setup and demo seeding
 
 ## Who can do what
 
-- **Everyone (no sign-in):** home, standings, schedule, teams & players (the squads and the
-  individual rankings on one page, each person's progress behind their name), awards and
-  rules. The site is open and read-only.
+- **Everyone (no sign-in):** home (the league table, this week's fixtures and the latest
+  scored day), schedule, teams & players (the squads and the individual rankings on one page,
+  each person's progress behind their name), awards and rules. The site is open and
+  read-only.
 - **Daily steps come from a Google Sheet**, pulled in once a day and on demand. See
   [docs/google-sheet.md](docs/google-sheet.md). Nobody types steps into the portal.
 - **Scores run to yesterday.** People report the previous day the next morning, so the portal
