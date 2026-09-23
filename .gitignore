@@ -1,9 +1,9 @@
 node_modules
 .next
-data/
+/data/
 .env*.local
 *.tsbuildinfo
 next-env.d.ts
 .claude/settings.local.json
 .DS_Store
-backups/
+/backups/
