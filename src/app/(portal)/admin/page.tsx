@@ -15,8 +15,8 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
   const weekParam = Number(sp.week);
   const recapWeek = Number.isInteger(weekParam) && s.weeks[weekParam - 1] ? s.weeks[weekParam - 1] : completed[completed.length - 1];
   const recap = recapWeek ? weeklyRecap(s, recapWeek.index, nameOf) : null;
-  const yesterday = addDays(s.today, -1);
-  const statusDays = [yesterday, s.today].filter((d) => d >= s.start && d <= s.end);
+  // Scores run a day behind, so these are the two most recent days that count.
+  const statusDays = [addDays(s.lastCounted, -1), s.lastCounted].filter((d) => d >= s.start && d <= s.end);
 
   return (
     <>
@@ -27,8 +27,8 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
           { icon: Users, label: "Participants", value: `${s.participants.length} in ${s.teams.length} teams`, href: "/admin/teams" },
           {
             icon: Footprints,
-            label: "Steps in for today",
-            value: `${s.participants.filter((m) => { const d = s.memberDay(m.id, s.today); return d.leave || d.steps !== null; }).length} / ${s.participants.length}`,
+            label: `Steps in for ${statusDays.length ? formatDay(s.lastCounted) : "the latest day"}`,
+            value: `${s.participants.filter((m) => { const d = s.memberDay(m.id, s.lastCounted); return d.leave || d.steps !== null; }).length} / ${s.participants.length}`,
             href: "/admin/data",
           },
         ].map((x) => (

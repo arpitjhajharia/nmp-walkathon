@@ -95,17 +95,48 @@ test("weekly fixture results feed standings with tie-breakers", () => {
 test("streaks pause on leave and break on a missed day", () => {
   const days = ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08"];
   const entries: Entry[] = [0, 1, 3, 4, 5].map((i) => ({ userId: "a1", date: days[i], steps: 6000 }));
-  const s = computeSeason(miniSnapshot(entries, [{ userId: "a1", date: days[2] }]), "2026-08-10");
+  const s = computeSeason(miniSnapshot(entries, [{ userId: "a1", date: days[2] }]), "2026-08-11");
   const st = s.stats.get("a1")!;
-  assert.equal(st.currentStreak, 0, "no entry on 9 Aug (a past day by the next day) → reset");
+  assert.equal(st.currentStreak, 0, "no entry on 9 Aug, and 10 Aug is the newest counted day → reset");
   assert.equal(st.bestStreak, 5);
   assert.equal(st.badges.find((b) => b.id === "streak_5")!.unlockedOn, days[5]);
 });
 
-test("today's pending entry does not break a streak", () => {
-  const days = ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06"];
+test("a not-yet-synced newest day does not break a streak", () => {
+  const days = ["2026-08-03", "2026-08-04", "2026-08-05"];
+  // Today is 7 Aug, so 6 Aug counts but this morning's sync has not brought it in.
   const s = computeSeason(miniSnapshot(days.map((d) => ({ userId: "a1", date: d, steps: 7000 }))), "2026-08-07");
-  assert.equal(s.stats.get("a1")!.currentStreak, 4);
+  assert.equal(s.lastCounted, "2026-08-06");
+  assert.equal(s.stats.get("a1")!.currentStreak, 3);
+});
+
+test("scores stop at yesterday, and so do possible points", () => {
+  const yesterday = "2026-08-04";
+  const today = "2026-08-05";
+  const s = computeSeason(
+    miniSnapshot([
+      { userId: "a1", date: yesterday, steps: 12000 },
+      { userId: "a1", date: today, steps: 12000 },
+    ]),
+    today,
+  );
+  assert.equal(s.today, today);
+  assert.equal(s.lastCounted, yesterday);
+  assert.equal(s.countedDates.at(-1), yesterday);
+  assert.equal(s.stats.get("a1")!.totalSteps, 12000, "today's steps wait for tomorrow");
+  const f = s.fixtures.find((x) => x.week.index === 0 && (x.home.teamId === "a" || x.away.teamId === "a"))!;
+  const a = f.home.teamId === "a" ? f.home : f.away;
+  assert.equal(a.points, 4);
+  assert.equal(a.possible, 40, "two counted days, five members, four points each");
+});
+
+test("day one has nothing to score yet", () => {
+  const s = computeSeason(miniSnapshot([{ userId: "a1", date: "2026-08-03", steps: 12000 }]), "2026-08-03");
+  assert.equal(s.phase, "live");
+  assert.equal(s.dayNumber, 1);
+  assert.equal(s.countedDates.length, 0);
+  assert.equal(s.stats.get("a1")!.totalSteps, 0);
+  assert.ok(todayInsight(s).length > 10);
 });
 
 test("weekly awards return joint winners on ties", () => {

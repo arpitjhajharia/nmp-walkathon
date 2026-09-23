@@ -64,7 +64,7 @@ export default async function RulesPage() {
               </table>
             </Card>
             <p>
-              A team of {cfg.teamSize} can earn up to {max * cfg.teamSize} points a day. Scores show as earned out of possible points, for example &ldquo;14 / 16 points&rdquo;.
+              A team of {cfg.teamSize} can earn up to {max * cfg.teamSize} points a day. Scores show as earned out of possible points, for example &ldquo;14 / 16 points&rdquo;. Possible points count only the days that have been scored, so today is in neither number.
             </p>
           </Block>
 
@@ -86,9 +86,10 @@ export default async function RulesPage() {
             <p>A missing entry is different: it earns no points, and the portal never guesses or copies steps automatically.</p>
           </Block>
 
-          <Block id="entry" title="Steps & corrections">
-            <p>The walkathon admins record everyone&apos;s daily steps. If a number is wrong, tell an admin: they can correct any day, and results for the week just finished stay provisional for {cfg.correctionDays} day{cfg.correctionDays === 1 ? "" : "s"} while corrections come in.</p>
-            <p>Every change is recorded with who made it and when. Scores, results, standings and awards recalculate automatically after any change.</p>
+          <Block id="entry" title="Steps & the one-day delay">
+            <p>Steps go into the shared Google Sheet, and most people fill in the day before on the following morning. The portal reads the sheet once a day and scores only days that are over, so <strong>everything you see runs to yesterday</strong>. Today&apos;s walking shows up tomorrow.</p>
+            <p>That is why possible points stop at yesterday as well: no team is marked down for a day nobody has reported yet.</p>
+            <p>If a number is wrong, correct the cell in the sheet. Results for the week just finished stay provisional for {cfg.correctionDays} day{cfg.correctionDays === 1 ? "" : "s"} while corrections come in, every change is recorded with who made it and when, and scores, results, standings and awards recalculate automatically.</p>
           </Block>
 
           <Block id="awards" title="Awards, badges & challenges">
@@ -114,7 +115,7 @@ export default async function RulesPage() {
               ["bands", "Daily team points"],
               ["fixtures", "Fixtures & league"],
               ["leave", "Leave"],
-              ["entry", "Steps & corrections"],
+              ["entry", "Steps & the delay"],
               ["awards", "Awards & badges"],
             ].map(([id, l]) => (
               <li key={id}>

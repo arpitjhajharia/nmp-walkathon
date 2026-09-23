@@ -36,9 +36,9 @@ function Row({ side, team, leading, f }: { side: FixtureSide; team: Team; leadin
           {team.name}
           {won && <span className="ml-2 align-middle text-xs font-bold uppercase tracking-wide text-win">Won</span>}
         </p>
-        {f.status === "live" && (
+        {f.status === "live" && side.possible > 0 && (
           <p className="tnum text-xs text-muted">
-            {side.today > 0 ? `+${side.today} today` : "No points yet today"} · {side.points}/{side.possible} possible
+            {side.points} of {side.possible} possible so far
           </p>
         )}
       </div>

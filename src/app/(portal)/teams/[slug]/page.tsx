@@ -25,7 +25,7 @@ export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
   const week = s.currentWeek;
   const fixture = week ? s.fixtures.find((f) => f.week.index === week.index && (f.home.teamId === team.id || f.away.teamId === team.id)) : undefined;
 
-  const weekDays = week ? week.dates.map((d) => ({ d, ...s.teamDay(team.id, d), future: d > s.today })) : [];
+  const weekDays = week ? week.dates.map((d) => ({ d, ...s.teamDay(team.id, d), future: d > s.lastCounted })) : [];
   let activeDays = 0,
     possibleDays = 0;
   for (const d of weekDays.filter((x) => !x.future))
@@ -112,7 +112,7 @@ export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
                   <div className="relative flex h-24 w-full max-w-10 items-end overflow-hidden rounded-md bg-line-2" aria-hidden="true">
                     <div className="w-full rounded-md" style={{ height: `${x.future ? 0 : (x.earned / maxBar) * 100}%`, backgroundColor: team.color }} />
                   </div>
-                  <span className={`text-xs ${x.d === s.today ? "font-bold text-ink" : "text-muted"}`} aria-hidden="true">{weekdayShort(x.d)}</span>
+                  <span className={`text-xs ${x.d === s.lastCounted ? "font-bold text-ink" : "text-muted"}`} aria-hidden="true">{weekdayShort(x.d)}</span>
                 </div>
               ))}
             </div>

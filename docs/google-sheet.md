@@ -48,6 +48,13 @@ CRON_SECRET=a-long-random-string      # optional but recommended; openssl rand -
 
 Every change a sync makes is written to the audit log, marked "Google Sheet sync".
 
+## Scores run to yesterday
+
+Because people report the day before on the following morning, the portal scores only days
+that are over. Every total, streak, standing and "possible points" figure in the site runs up
+to **yesterday**; today is in none of them, and appears tomorrow. A figure typed into today's
+column early simply waits for its day.
+
 ## Corrections
 
 The sheet is the only place steps are typed: there is no step form in the portal, because the

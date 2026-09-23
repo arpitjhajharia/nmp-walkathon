@@ -31,8 +31,8 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
   }
 
   const bands = sortedBands(s.settings.bands);
-  const today = st.today;
-  const nb = today.steps !== null ? nextBand(today.steps, bands) : null;
+  const latest = st.latest;
+  const nb = latest.steps !== null ? nextBand(latest.steps, bands) : null;
   const days = s.countedDates.slice(-30);
   const values = days.map((d) => s.memberDay(id, d));
   const top = Math.max(14000, ...values.map((v) => v.steps ?? 0));
@@ -53,22 +53,24 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="bg-night p-5 text-white lg:col-span-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-white/60">Today · {formatDay(s.today)}</p>
-          {today.leave ? (
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/60">Latest day · {formatDay(s.lastCounted)}</p>
+          {s.countedDates.length === 0 ? (
+            <p className="mt-2 text-white/80">The first day is scored tomorrow morning.</p>
+          ) : latest.leave ? (
             <p className="mt-2 font-display text-3xl font-bold uppercase">On leave</p>
-          ) : today.steps === null ? (
-            <p className="mt-2 text-white/80">Not entered yet today.</p>
+          ) : latest.steps === null ? (
+            <p className="mt-2 text-white/80">Not in the sheet yet.</p>
           ) : (
             <>
-              <p className="tnum mt-1 font-display text-5xl font-bold">{fmt(today.steps)}</p>
+              <p className="tnum mt-1 font-display text-5xl font-bold">{fmt(latest.steps)}</p>
               <div className="mt-1 flex items-center gap-2">
-                <Pips points={today.points} max={s.maxDaily} dark />
+                <Pips points={latest.points} max={s.maxDaily} dark />
                 <span className="text-sm text-white/80">
-                  {today.points} team point{today.points === 1 ? "" : "s"}
+                  {latest.points} team point{latest.points === 1 ? "" : "s"}
                 </span>
               </div>
               <p className="mt-3 text-sm text-accent">
-                {nb ? `${fmt(nb.gap)} more steps would earn ${nb.points - today.points} extra point${nb.points - today.points === 1 ? "" : "s"}.` : `Top band reached: full points for ${team.name}.`}
+                {nb ? `${fmt(nb.gap)} more steps would have earned ${nb.points - latest.points} extra point${nb.points - latest.points === 1 ? "" : "s"}.` : `Top band reached: full points for ${team.name}.`}
               </p>
             </>
           )}

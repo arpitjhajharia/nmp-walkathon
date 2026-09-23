@@ -107,6 +107,9 @@ scripts/               setup and demo seeding
   rules. The site is open and read-only.
 - **Daily steps come from a Google Sheet**, pulled in once a day and on demand. See
   [docs/google-sheet.md](docs/google-sheet.md). Nobody types steps into the portal.
+- **Scores run to yesterday.** People report the previous day the next morning, so the portal
+  only scores days that are over. Possible points stop there too, so no team is marked down
+  for a day nobody has reported yet.
 - **Admins** sign in from the "Admin sign-in" link at the bottom of any page. Only they can
   use the Admin area: season dates and rules, teams, captains, members and admin access,
   fixtures and challenges, leave records, the sheet sync, CSV import and export, weekly recap

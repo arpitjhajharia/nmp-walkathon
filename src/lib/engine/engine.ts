@@ -120,9 +120,9 @@ export interface WeekInfo {
 export interface FixtureSide {
   teamId: string;
   points: number;
+  /** Points available on the days counted so far, so today is not held against a team. */
   possible: number;
   steps: number;
-  today: number;
 }
 
 export interface FixtureResult {
@@ -187,7 +187,8 @@ export interface MemberStats {
   thisWeekActiveDays: number;
   lastWeekSteps: number;
   badges: BadgeStatus[];
-  today: MemberDay;
+  /** The most recent day that counts, which is yesterday. */
+  latest: MemberDay;
 }
 
 export interface AwardWinner {
@@ -236,6 +237,11 @@ export interface BadgeUnlock {
 export interface Season {
   settings: Settings;
   today: ISODate;
+  /**
+   * The last day whose steps count. People report yesterday's total the next morning, so
+   * today is never scored: every total, streak and "possible" figure stops here.
+   */
+  lastCounted: ISODate;
   phase: Phase;
   start: ISODate;
   end: ISODate;
@@ -352,7 +358,10 @@ export function computeSeason(snap: Snapshot, today: ISODate): Season {
   const end = addDays(start, settings.lengthDays - 1);
   const dates = dateRange(start, settings.lengthDays);
   const phase: Phase = today < start ? "pre" : today > end ? "finished" : "live";
-  const lastCounted = today < end ? today : end;
+  // Steps arrive the morning after the day they were walked, so a day is only scored once
+  // it is over. Everything downstream counts up to here, today included in neither.
+  const yesterday = addDays(today, -1);
+  const lastCounted = yesterday < end ? yesterday : end;
   const countedDates = dates.filter((d) => d <= lastCounted);
   const dayNumber = phase === "pre" ? 0 : phase === "finished" ? settings.lengthDays : diffDays(start, today) + 1;
   const daysRemaining = phase === "pre" ? settings.lengthDays : Math.max(0, diffDays(today, end));
@@ -438,8 +447,11 @@ export function computeSeason(snap: Snapshot, today: ISODate): Season {
   const completedWeeks = weeks.filter((w) => w.status === "completed");
   const lastCompletedWeek = completedWeeks[completedWeeks.length - 1] ?? null;
 
-  const teamPointsIn = (teamId: string, ds: ISODate[]) => sum(ds.map((d) => teamDay(teamId, d).earned));
-  const teamStepsIn = (teamId: string, ds: ISODate[]) => sum(ds.map((d) => teamDay(teamId, d).steps));
+  // Every team total — fixtures, standings, cups, the sprint — stops at the last scored day,
+  // so an early entry for today cannot count before the day it belongs to.
+  const scored = (ds: ISODate[]) => ds.filter((d) => d <= lastCounted);
+  const teamPointsIn = (teamId: string, ds: ISODate[]) => sum(scored(ds).map((d) => teamDay(teamId, d).earned));
+  const teamStepsIn = (teamId: string, ds: ISODate[]) => sum(scored(ds).map((d) => teamDay(teamId, d).steps));
 
   // Fixtures
   const fixtures: FixtureResult[] = snap.fixtures
@@ -450,9 +462,8 @@ export function computeSeason(snap: Snapshot, today: ISODate): Season {
       const side = (teamId: string): FixtureSide => ({
         teamId,
         points: teamPointsIn(teamId, week.dates),
-        possible: sum(week.dates.filter((d) => d <= lastCounted).map((d) => teamDay(teamId, d).possible)),
+        possible: sum(scored(week.dates).map((d) => teamDay(teamId, d).possible)),
         steps: teamStepsIn(teamId, week.dates),
-        today: week.dates.includes(today) ? teamDay(teamId, today).earned : 0,
       });
       const home = side(f.homeTeamId);
       const away = side(f.awayTeamId);
@@ -547,7 +558,7 @@ export function computeSeason(snap: Snapshot, today: ISODate): Season {
       const md = memberDay(m.id, d);
       if (md.leave) continue; // leave pauses a streak without breaking it
       if (md.steps === null) {
-        if (d !== today) streak = 0; // today's entry may simply not be in yet
+        if (d !== lastCounted) streak = 0; // the newest day may simply not have synced yet
         continue;
       }
       firstDay ??= d;
@@ -606,7 +617,7 @@ export function computeSeason(snap: Snapshot, today: ISODate): Season {
       thisWeekActiveDays: weekDates.filter((d) => (memberDay(m.id, d).steps ?? 0) >= activeSteps).length,
       lastWeekSteps: prevWeek ? stepsIn(m.id, prevWeek.dates) : 0,
       badges,
-      today: memberDay(m.id, today),
+      latest: memberDay(m.id, lastCounted),
     });
     void firstDay;
   }
@@ -713,6 +724,7 @@ export function computeSeason(snap: Snapshot, today: ISODate): Season {
   return {
     settings,
     today,
+    lastCounted,
     phase,
     start,
     end,
@@ -773,10 +785,10 @@ export function todayInsight(s: Season): string {
     }
   }
 
-  // 2. Members close to the next band today
+  // 2. Members who just missed the next band
   const nearByTeam = new Map<string, number>();
   for (const m of s.participants) {
-    const d = s.memberDay(m.id, s.today);
+    const d = s.memberDay(m.id, s.lastCounted);
     if (d.steps === null) continue;
     const nb = nextBand(d.steps, s.settings.bands);
     if (nb && nb.gap <= 1000) nearByTeam.set(m.teamId!, (nearByTeam.get(m.teamId!) ?? 0) + 1);
@@ -784,11 +796,11 @@ export function todayInsight(s: Season): string {
   const bestNear = [...nearByTeam.entries()].sort((a, b) => b[1] - a[1])[0];
   if (bestNear) {
     const [teamId, n] = bestNear;
-    return `${word(n)} ${teamName(teamId)} member${n === 1 ? " is" : "s are"} within 1,000 steps of the next point band today.`;
+    return `${word(n)} ${teamName(teamId)} member${n === 1 ? " is" : "s are"} finishing within 1,000 steps of the next point band. Today is the day to close it.`;
   }
 
   // 3. Streaks about to land
-  const almost = [...s.stats.values()].filter((st) => [4, 9, 24].includes(st.currentStreak) && (st.today.steps ?? 0) < s.activeSteps);
+  const almost = [...s.stats.values()].filter((st) => [4, 9, 24].includes(st.currentStreak));
   if (almost.length > 0) {
     const n = almost.length;
     return `${word(n)} ${n === 1 ? "person is" : "people are"} one day away from a new streak badge.`;

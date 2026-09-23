@@ -15,12 +15,13 @@ export default async function HomePage() {
   const weekFixtures = week ? s.fixtures.filter((f) => f.week.index === week.index) : [];
   const orderedFixtures = weekFixtures;
 
-  const todayRecorded = s.participants.filter((m) => {
-    const d = s.memberDay(m.id, s.today);
+  // Steps land the morning after, so the freshest day anyone can see is yesterday.
+  const latestRecorded = s.participants.filter((m) => {
+    const d = s.memberDay(m.id, s.lastCounted);
     return d.leave || d.steps !== null;
   }).length;
-  const todaySteps = s.participants.reduce((sum, m) => sum + (s.memberDay(m.id, s.today).steps ?? 0), 0);
-  const inSeason = s.phase === "live";
+  const latestSteps = s.participants.reduce((sum, m) => sum + (s.memberDay(m.id, s.lastCounted).steps ?? 0), 0);
+  const scored = s.phase !== "pre" && s.countedDates.length > 0;
 
   const challenge = week ? s.challenges.find((c) => c.weekIndex === week.index) : undefined;
   const challengeDone = challenge?.progress.filter((p) => p.completed).length ?? 0;
@@ -68,6 +69,7 @@ export default async function HomePage() {
             </div>
             <p className="tnum mt-1.5 text-xs text-white/60">
               Day {s.dayNumber} of {s.settings.lengthDays}
+              {scored && ` · scored to ${formatDay(s.lastCounted)}`}
             </p>
           </div>
         )}
@@ -111,36 +113,38 @@ export default async function HomePage() {
           </Card>
         </section>
 
-        {/* 4. Today's movement */}
-        <section className="lg:col-span-5" aria-label="Today's movement">
-          <SectionTitle title="Today's movement" sub={formatDay(s.today)} />
+        {/* 4. The latest scored day */}
+        <section className="lg:col-span-5" aria-label="Latest day">
+          <SectionTitle title="Latest day" sub={scored ? formatDay(s.lastCounted) : undefined} />
           <Card className="p-5">
-            {!inSeason ? (
-              <p className="text-sm text-muted">{s.phase === "pre" ? "Entries open on day one." : "The season has finished."}</p>
+            {!scored ? (
+              <p className="text-sm text-muted">
+                {s.phase === "pre" ? "The first steps are scored the morning after day one." : s.phase === "finished" ? "The season has finished." : "Day one is scored tomorrow morning."}
+              </p>
             ) : (
               <>
                 <div className="flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted">Entries in</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted">Walkers in</p>
                     <p className="tnum font-display text-4xl font-bold leading-none">
-                      {todayRecorded}
+                      {latestRecorded}
                       <span className="text-2xl text-muted">/{s.participants.length}</span>
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted">Steps recorded</p>
-                    <p className="tnum font-display text-4xl font-bold leading-none">{fmt(todaySteps)}</p>
+                    <p className="tnum font-display text-4xl font-bold leading-none">{fmt(latestSteps)}</p>
                   </div>
                 </div>
                 <div className="mt-3">
-                  <Progress value={todayRecorded} max={s.participants.length} label="Entries recorded today" />
+                  <Progress value={latestRecorded} max={s.participants.length} label="Walkers with steps on the latest day" />
                 </div>
-                {todayRecorded === 0 ? (
-                  <p className="mt-4 rounded-xl bg-line-2 px-3 py-3 text-sm font-medium text-ink-2">Today&apos;s match is waiting for the first entries.</p>
+                {latestRecorded === 0 ? (
+                  <p className="mt-4 rounded-xl bg-line-2 px-3 py-3 text-sm font-medium text-ink-2">Nothing for this day in the sheet yet.</p>
                 ) : (
                   <ul className="mt-4 space-y-2">
                     {s.teams.map((t) => {
-                      const td = s.teamDay(t.id, s.today);
+                      const td = s.teamDay(t.id, s.lastCounted);
                       const label = td.status === "complete" ? "Complete" : td.status === "partial" ? `${td.recorded} of ${td.members}` : "Not entered";
                       return (
                         <li key={t.id} className="flex items-center justify-between gap-2 text-sm">
