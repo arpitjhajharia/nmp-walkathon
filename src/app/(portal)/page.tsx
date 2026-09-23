@@ -3,7 +3,7 @@ import Link from "next/link";
 import { FixtureCard } from "@/components/fixture-card";
 import { StandingsTable } from "@/components/standings-table";
 import { TeamBadge, TeamIcon } from "@/components/team";
-import { Card, Chip, EmptyState, Progress, SectionTitle, compact, fmt, joinNames } from "@/components/ui";
+import { Avatar, Card, Chip, EmptyState, Movement, Progress, SectionTitle, compact, fmt, joinNames } from "@/components/ui";
 import { diffDays, formatDay, formatRange, formatShort } from "@/lib/engine/dates";
 import { BADGES, todayInsight } from "@/lib/engine/engine";
 import { getPortal } from "@/lib/server/season";
@@ -13,7 +13,6 @@ export default async function HomePage() {
   const teams = new Map(s.teams.map((t) => [t.id, t]));
   const week = s.currentWeek;
   const weekFixtures = week ? s.fixtures.filter((f) => f.week.index === week.index) : [];
-  const orderedFixtures = weekFixtures;
 
   // Steps land the morning after, so the freshest day anyone can see is yesterday.
   const latestRecorded = s.participants.filter((m) => {
@@ -22,6 +21,25 @@ export default async function HomePage() {
   }).length;
   const latestSteps = s.participants.reduce((sum, m) => sum + (s.memberDay(m.id, s.lastCounted).steps ?? 0), 0);
   const scored = s.phase !== "pre" && s.countedDates.length > 0;
+
+  // The running order. Unlike the league table this counts the week in progress, so it
+  // moves every morning. Teams level on points are split by steps, then share a position.
+  const sorted = s.teams
+    .map((t) => ({
+      team: t,
+      points: s.countedDates.reduce((sum, d) => sum + s.teamDay(t.id, d).earned, 0),
+      steps: s.countedDates.reduce((sum, d) => sum + s.teamDay(t.id, d).steps, 0),
+    }))
+    .sort((a, b) => b.points - a.points || b.steps - a.steps);
+  let place = 0;
+  const ranking = sorted.map((r, i) => {
+    const prev = sorted[i - 1];
+    if (!prev || prev.points !== r.points || prev.steps !== r.steps) place = i + 1;
+    return { ...r, position: place };
+  });
+  const leadPoints = ranking[0]?.points ?? 0;
+
+  const topWalkers = s.leaderboards.total.slice(0, 8);
 
   const challenge = week ? s.challenges.find((c) => c.weekIndex === week.index) : undefined;
   const challengeDone = challenge?.progress.filter((p) => p.completed).length ?? 0;
@@ -33,7 +51,7 @@ export default async function HomePage() {
   const sprint = s.finalSprint;
   const sprintLine =
     sprint.status === "upcoming"
-      ? `Final Sprint starts in ${diffDays(s.today, sprint.start)} days`
+      ? `Final Sprint in ${diffDays(s.today, sprint.start)} days`
       : sprint.status === "live"
         ? `Final Sprint: ${diffDays(s.today, sprint.end) + 1} days left`
         : "Final Sprint complete";
@@ -41,43 +59,81 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-8">
-      {/* 1. Competition + days remaining */}
-      <section className="relative overflow-hidden rounded-3xl bg-night px-5 py-6 text-white sm:px-8 sm:py-8" aria-labelledby="season-title">
-        <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-night-3/60 blur-2xl" aria-hidden="true" />
-        <div className="relative flex flex-wrap items-end justify-between gap-6">
+      {/* The season at a glance. Where we are matters more than how long is left, so this is a strip. */}
+      <section className="overflow-hidden rounded-2xl bg-night px-5 py-4 text-white sm:px-6" aria-labelledby="season-title">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
           <div className="min-w-0">
-            <p className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-accent">
-              {s.phase === "live" ? `Week ${week?.number} · ${formatDay(s.today)}` : s.phase === "pre" ? "Coming soon" : "Season complete"}
-            </p>
-            <h1 id="season-title" className="mt-1 font-display text-4xl font-bold uppercase leading-none sm:text-5xl">
+            <h1 id="season-title" className="font-display text-2xl font-bold uppercase leading-none sm:text-3xl">
               {s.settings.seasonName}
             </h1>
-            <p className="mt-2 text-white/70">
-              {formatShort(s.start)} to {formatShort(s.end)} · {sprintLine}
-            </p>
-          </div>
-          <div className="sm:text-right">
-            <p className="tnum font-display text-6xl font-bold leading-none text-accent sm:text-7xl">
-              {s.phase === "pre" ? diffDays(s.today, s.start) : s.daysRemaining}
-            </p>
-            <p className="text-sm font-semibold uppercase tracking-wider text-white/70">{s.phase === "pre" ? "days to kick-off" : "days remaining"}</p>
-          </div>
-        </div>
-        {s.phase !== "pre" && (
-          <div className="relative mt-6">
-            <div className="h-2 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-label="Season progress" aria-valuenow={s.dayNumber} aria-valuemin={0} aria-valuemax={s.settings.lengthDays}>
-              <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-            </div>
-            <p className="tnum mt-1.5 text-xs text-white/60">
-              Day {s.dayNumber} of {s.settings.lengthDays}
+            <p className="mt-1 text-sm text-white/70">
+              {s.phase === "live" ? `Week ${week?.number} · ${formatDay(s.today)}` : s.phase === "pre" ? `Starts ${formatShort(s.start)}` : "Season complete"}
               {scored && ` · scored to ${formatDay(s.lastCounted)}`}
             </p>
           </div>
+          <p className="tnum text-sm text-white/70">
+            {s.phase === "pre" ? (
+              `${diffDays(s.today, s.start)} days to kick-off`
+            ) : (
+              <>
+                Day <span className="font-display text-xl font-bold text-accent">{s.dayNumber}</span> of {s.settings.lengthDays} · {s.daysRemaining} left · {sprintLine}
+              </>
+            )}
+          </p>
+        </div>
+        {s.phase !== "pre" && (
+          <div
+            className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"
+            role="progressbar"
+            aria-label="Season progress"
+            aria-valuenow={s.dayNumber}
+            aria-valuemin={0}
+            aria-valuemax={s.settings.lengthDays}
+          >
+            <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+          </div>
         )}
         {s.champion.length > 0 && (
-          <p className="relative mt-5 inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-sm font-bold text-night">
+          <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-sm font-bold text-night">
             <Medal className="size-4" aria-hidden="true" /> Season Champion: {s.champion.map((id) => teams.get(id)!.name).join(" & ")}
           </p>
+        )}
+      </section>
+
+      {/* 1. Season rankings */}
+      <section aria-labelledby="ranking-h">
+        <div id="ranking-h">
+          <SectionTitle
+            title="Season rankings"
+            sub="Every point scored so far, the week in progress included. This moves every morning."
+            action={{ href: "/teams", label: "Teams & players" }}
+          />
+        </div>
+        {!scored ? (
+          <EmptyState title="Nothing scored yet">
+            {s.phase === "pre" ? "The first steps are scored the morning after day one." : "Day one is scored tomorrow morning."}
+          </EmptyState>
+        ) : (
+          <ol className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {ranking.map((r) => (
+              <li key={r.team.id}>
+                <Card as="article" className={`h-full overflow-hidden ${r.position === 1 ? "ring-2 ring-accent" : ""}`}>
+                  <div className="h-1.5" style={{ backgroundColor: r.team.color }} />
+                  <div className="p-4">
+                    <div className="flex items-center gap-2">
+                      <span className="tnum font-display text-3xl font-bold leading-none text-ink-2">{r.position}</span>
+                      <TeamBadge team={r.team} size="sm" link className="min-w-0" />
+                    </div>
+                    <p className="tnum mt-3 font-display text-4xl font-bold leading-none">{fmt(r.points)}</p>
+                    <p className="mt-1 text-xs text-muted">team points · {compact(r.steps)} steps</p>
+                    <div className="mt-3">
+                      <Progress value={r.points} max={leadPoints || 1} color={r.team.color} label={`${r.team.name}: ${r.points} team points`} />
+                    </div>
+                  </div>
+                </Card>
+              </li>
+            ))}
+          </ol>
         )}
       </section>
 
@@ -90,9 +146,9 @@ export default async function HomePage() {
             action={{ href: "/schedule", label: "Full schedule" }}
           />
         </div>
-        {orderedFixtures.length ? (
+        {weekFixtures.length ? (
           <div className="grid gap-3 md:grid-cols-2">
-            {orderedFixtures.map((f) => (
+            {weekFixtures.map((f) => (
               <FixtureCard key={f.id} f={f} teams={teams} />
             ))}
           </div>
@@ -118,32 +174,112 @@ export default async function HomePage() {
         <dl className="mt-3 grid gap-x-6 gap-y-1 text-xs text-muted sm:grid-cols-2">
           <div><dt className="inline font-semibold text-ink-2">Ranking order: </dt><dd className="inline">league points, then fixtures won, then total activity points, then total steps.</dd></div>
           <div><dt className="inline font-semibold text-ink-2">Form: </dt><dd className="inline">last five results, oldest first (W win, D draw, L loss).</dd></div>
-          <div><dt className="inline font-semibold text-ink-2">Activity pts: </dt><dd className="inline">all daily team points earned in completed weeks.</dd></div>
+          <div><dt className="inline font-semibold text-ink-2">Activity pts: </dt><dd className="inline">all daily team points earned in completed weeks. The season rankings above count this week too.</dd></div>
           <div><dt className="inline font-semibold text-ink-2">Move: </dt><dd className="inline">change in position since the previous completed week.</dd></div>
         </dl>
       </section>
 
-      <div className="grid gap-8 lg:grid-cols-12">
-        {/* 4. Season totals, which unlike the table count the week in progress */}
-        <section className="lg:col-span-7" aria-label="Season totals">
-          <SectionTitle title="Season totals" sub="Everything scored so far, including the current week." />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {s.teams.map((t) => {
-              const pts = s.countedDates.reduce((sum, d) => sum + s.teamDay(t.id, d).earned, 0);
-              const steps = s.countedDates.reduce((sum, d) => sum + s.teamDay(t.id, d).steps, 0);
-              return (
-                <Card key={t.id} className="p-4">
-                  <TeamBadge team={t} size="sm" link />
-                  <p className="tnum mt-3 font-display text-3xl font-bold">{fmt(pts)}</p>
-                  <p className="text-xs text-muted">team points · {compact(steps)} steps</p>
-                </Card>
-              );
-            })}
+      {/* 4. Player performance */}
+      <section aria-labelledby="players-h">
+        <div id="players-h">
+          <SectionTitle title="Player performance" sub="Steps and points for the people behind the teams." action={{ href: "/teams?view=players", label: "All players" }} />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <h3 className="mb-2 font-display text-sm font-bold uppercase tracking-wider text-ink-2">Top walkers</h3>
+            {!scored ? (
+              <EmptyState title="No steps in yet" icon={<Footprints className="size-6" />} />
+            ) : (
+              <Card as="div">
+                <ol className="divide-y divide-line-2">
+                  {topWalkers.map((r) => {
+                    const st = s.stats.get(r.userId)!;
+                    const team = teams.get(st.teamId);
+                    return (
+                      <li key={r.userId} className="flex items-center gap-3 px-4 py-2.5">
+                        <span className={`tnum w-6 shrink-0 text-center font-display text-lg font-bold ${r.rank <= 3 ? "text-accent-ink" : "text-muted"}`}>{r.rank}</span>
+                        <Avatar name={nameOf(r.userId)} color={team?.color} />
+                        <span className="min-w-0 flex-1">
+                          <Link href={`/players/${r.userId}`} className="block truncate font-semibold hover:underline">
+                            {nameOf(r.userId)}
+                          </Link>
+                          <span className="block truncate text-xs text-muted">
+                            {[team?.name, st.currentStreak >= 3 ? `${st.currentStreak}-day streak` : null].filter(Boolean).join(" · ")}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="tnum block font-display text-lg font-bold leading-tight">{fmt(st.totalSteps)}</span>
+                          <span className="tnum block text-xs text-muted">{st.pointsContributed} pts</span>
+                        </span>
+                        {r.change !== null && (
+                          <span className="w-9 shrink-0 text-right">
+                            <Movement value={r.change} />
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+                <p className="border-t border-line-2 px-4 py-2.5 text-xs text-muted">
+                  Ranked by total steps. Points are what each person contributed to their team.{lastWeek && " Arrows show movement since last Sunday."}
+                </p>
+              </Card>
+            )}
           </div>
-        </section>
 
+          <div className="lg:col-span-5">
+            <h3 className="mb-2 flex items-end justify-between gap-3 font-display text-sm font-bold uppercase tracking-wider text-ink-2">
+              Awards &amp; badges
+              <Link href="/awards" className="text-xs font-semibold normal-case tracking-normal text-night-3 hover:underline">
+                All awards →
+              </Link>
+            </h3>
+            <Card as="div" className="divide-y divide-line-2">
+              {lastAwards ? (
+                (
+                  [
+                    ["Weekly MVP", lastAwards.mvp],
+                    ["Consistency Star", lastAwards.consistency],
+                    ["Comeback Walker", lastAwards.comeback],
+                    ["Team Player", lastAwards.teamPlayer],
+                  ] as const
+                ).map(([label, winners]) => (
+                  <div key={label} className="flex items-start gap-3 px-5 py-3">
+                    <Award className="mt-0.5 size-4 shrink-0 text-accent-ink" aria-hidden="true" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
+                      <p className="text-sm font-semibold text-ink">{winners.length ? joinNames(winners.map((w) => nameOf(w.userId).split(" ")[0])) : "Not awarded"}</p>
+                      {winners[0] && <p className="text-xs text-muted">{winners[0].detail}</p>}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="px-5 py-4 text-sm text-muted">Awards are announced after the first Sunday.</p>
+              )}
+              {recentBadges.length > 0 && (
+                <div className="px-5 py-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">New badges</p>
+                  <ul className="flex flex-wrap gap-2">
+                    {recentBadges.map((b) => {
+                      const team = teams.get(s.stats.get(b.userId)?.teamId ?? "");
+                      return (
+                        <li key={`${b.userId}-${b.badgeId}`} className="inline-flex items-center gap-1.5 rounded-full bg-line-2 py-1 pl-1 pr-2.5 text-xs font-semibold">
+                          {team && <TeamIcon team={team} size="sm" />}
+                          {nameOf(b.userId).split(" ")[0]} · {BADGES.find((x) => x.id === b.badgeId)?.name}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-8 lg:grid-cols-2">
         {/* 5. The latest scored day */}
-        <section className="lg:col-span-5" aria-label="Latest day">
+        <section aria-label="Latest day">
           <SectionTitle title="Latest day" sub={scored ? formatDay(s.lastCounted) : undefined} />
           <Card className="p-5">
             {!scored ? (
@@ -193,9 +329,7 @@ export default async function HomePage() {
             )}
           </Card>
         </section>
-      </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
         {/* 6. Weekly challenge */}
         <section aria-label="Weekly challenge">
           <SectionTitle title="Weekly challenge" sub="Optional, just for fun. It never changes league points." />
@@ -220,53 +354,9 @@ export default async function HomePage() {
             </EmptyState>
           )}
         </section>
-
-        {/* 7. Latest awards & badges */}
-        <section aria-label="Latest awards and badges">
-          <SectionTitle title="Latest awards" sub={s.lastCompletedWeek ? `Week ${s.lastCompletedWeek.number}` : undefined} action={{ href: "/awards", label: "All awards" }} />
-          <Card className="divide-y divide-line-2">
-            {lastAwards ? (
-              (
-                [
-                  ["Weekly MVP", lastAwards.mvp],
-                  ["Consistency Star", lastAwards.consistency],
-                  ["Comeback Walker", lastAwards.comeback],
-                  ["Team Player", lastAwards.teamPlayer],
-                ] as const
-              ).map(([label, winners]) => (
-                <div key={label} className="flex items-start gap-3 px-5 py-3">
-                  <Award className="mt-0.5 size-4 shrink-0 text-accent-ink" aria-hidden="true" />
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
-                    <p className="text-sm font-semibold text-ink">{winners.length ? joinNames(winners.map((w) => nameOf(w.userId).split(" ")[0])) : "Not awarded"}</p>
-                    {winners[0] && <p className="text-xs text-muted">{winners[0].detail}</p>}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="px-5 py-4 text-sm text-muted">Awards are announced after the first Sunday.</p>
-            )}
-            {recentBadges.length > 0 && (
-              <div className="px-5 py-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">New badges</p>
-                <ul className="flex flex-wrap gap-2">
-                  {recentBadges.map((b) => {
-                    const team = teams.get(s.stats.get(b.userId)?.teamId ?? "");
-                    return (
-                      <li key={`${b.userId}-${b.badgeId}`} className="inline-flex items-center gap-1.5 rounded-full bg-line-2 py-1 pl-1 pr-2.5 text-xs font-semibold">
-                        {team && <TeamIcon team={team} size="sm" />}
-                        {nameOf(b.userId).split(" ")[0]} · {BADGES.find((x) => x.id === b.badgeId)?.name}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-          </Card>
-        </section>
       </div>
 
-      {/* 8. What matters today */}
+      {/* 7. What matters today */}
       <section aria-label="What matters today" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
         <Lightbulb className="mt-0.5 size-5 shrink-0 text-amber-700" aria-hidden="true" />
         <div>
