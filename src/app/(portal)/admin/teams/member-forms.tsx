@@ -22,7 +22,7 @@ export function AddMemberForm({ teams }: { teams: { id: string; name: string }[]
       <Field label="Full name" htmlFor="new-name">
         <input id="new-name" name="name" required className={inputCls} />
       </Field>
-      <Field label="Work email" htmlFor="new-email">
+      <Field label="Email" htmlFor="new-email" hint="Used to match CSV imports and to contact them. They don't sign in.">
         <input id="new-email" name="email" type="email" required className={inputCls} />
       </Field>
       <Field label="Team" htmlFor="new-team">

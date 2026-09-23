@@ -65,7 +65,7 @@ demo admin sign-in and a **Reset demo data** button.
 - **Next.js 16 (App Router) + React 19 + Tailwind CSS 4** on Vercel. Server components render
   every page; changes go through server actions.
 - **Supabase Auth** for admin sign-in (email and password, no self sign-up).
-  `ALLOWED_EMAIL_DOMAIN` limits sign-in and new members to your company's addresses.
+  `ALLOWED_EMAIL_DOMAIN` limits admin sign-in to your company's addresses.
 - **Supabase Postgres with row-level security does the authorisation.** Visitors read
   through the public (anon) role and admins act as themselves, so the database enforces:
   - anyone can read the competition, but never email addresses or the audit log;
@@ -145,7 +145,8 @@ See `.env.example`:
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`: public project settings.
 - `SUPABASE_SERVICE_ROLE_KEY`: server-only secret. Keep it out of Git and never give it a
   `NEXT_PUBLIC_` prefix.
-- `ALLOWED_EMAIL_DOMAIN`: restricts sign-in and new members to your domain.
+- `ALLOWED_EMAIL_DOMAIN`: limits admin sign-in to your domain. People you add don't sign in,
+  so their email addresses can be anything.
 - `DEMO_MODE`: demo sign-in buttons and **Reset demo data**.
 - `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`: used once by `npm run setup`.
 - `GOOGLE_SHEETS_WEBHOOK_URL`, `GOOGLE_SHEETS_SECRET`: optional Sheets backup, see

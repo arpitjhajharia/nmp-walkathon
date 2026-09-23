@@ -20,9 +20,14 @@ async function finishSignIn(): Promise<string | null> {
 export async function signIn(_prev: { error: string } | null, formData: FormData): Promise<{ error: string }> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const domain = process.env.ALLOWED_EMAIL_DOMAIN;
-  if (domain && !email.toLowerCase().endsWith(`@${domain.toLowerCase()}`)) {
-    return { error: `Please use your @${domain} work email.` };
+  // Admins are the only people who sign in, so this limits admin accounts to your domain.
+  // Accepts "company.com", "@company.com" or a list like "a.com, b.com".
+  const domains = (process.env.ALLOWED_EMAIL_DOMAIN ?? "")
+    .split(",")
+    .map((d) => d.trim().toLowerCase().replace(/^@/, ""))
+    .filter(Boolean);
+  if (domains.length && !domains.some((d) => email.toLowerCase().endsWith(`@${d}`))) {
+    return { error: `Please use your ${domains.map((d) => `@${d}`).join(" or ")} work email.` };
   }
   const db = await userDb();
   const { error } = await db.auth.signInWithPassword({ email, password });

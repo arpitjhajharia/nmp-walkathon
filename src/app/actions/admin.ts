@@ -123,8 +123,7 @@ export async function createMember(_prev: MemberState | null, formData: FormData
   const name = str(formData, "name");
   const email = str(formData, "email").toLowerCase();
   if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, message: "Enter a name and a valid work email." };
-  const domain = process.env.ALLOWED_EMAIL_DOMAIN;
-  if (domain && !email.endsWith(`@${domain.toLowerCase()}`)) return { ok: false, message: `Use an @${domain} email address.` };
+  // Any email is fine here: people don't sign in. ALLOWED_EMAIL_DOMAIN only limits admin sign-in.
   if ([...(await listContacts()).values()].some((c) => c.email.toLowerCase() === email)) return { ok: false, message: "Someone already uses that email." };
   let password: string | null;
   try {
