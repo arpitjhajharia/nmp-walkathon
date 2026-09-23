@@ -1,5 +1,6 @@
-// Scheduled sheet sync. Vercel's cron calls this once a day (see vercel.json); it can also
-// be triggered by hand with the CRON_SECRET.
+// Scheduled sheet sync. Vercel's cron calls this at 11:00 India time (see vercel.json), by
+// which point people have usually reported the previous day. It can also be triggered by
+// hand with the CRON_SECRET.
 import { describeSync, syncFromSheet } from "@/lib/server/sheet-sync";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sheetConfigured } from "@/lib/server/sheet";

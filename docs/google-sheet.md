@@ -37,8 +37,11 @@ CRON_SECRET=a-long-random-string      # optional but recommended; openssl rand -
 
 ## When it syncs
 
-- **Once a day automatically**, at 22:00 India time, set in `vercel.json`. Vercel's Hobby
-  plan allows one scheduled run a day; change the time there if you prefer another.
+- **Once a day automatically**, at 11:00 India time (`"30 5 * * *"` UTC in `vercel.json`),
+  which suits people reporting the previous day's total the next morning. Vercel's Hobby plan
+  allows one scheduled run a day; change the time there if you prefer another. A sync always
+  reads every day in the sheet, not just today, so late entries and corrections are picked up
+  by the next run whatever date they belong to.
 - **On demand** from **Admin → Data & corrections → Sync steps from the sheet**, which shows
   what changed, plus anything it couldn't match.
 - **From your machine** with `npm run sync:sheet`.
