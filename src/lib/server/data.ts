@@ -265,7 +265,16 @@ export async function addMember(input: { name: string; email: string; teamId: st
     "Adding the member",
   ) as { id: string };
   if (input.teamId) await rpc("set_member_team", { p_season: (await currentSeason()).id, p_user: row.id, p_team: input.teamId, p_effective: await effectiveDate() });
-  const password = input.isAdmin ? await createLogin(row.id, input.email, input.name) : null;
+  let password: string | null = null;
+  if (input.isAdmin) {
+    try {
+      password = await createLogin(row.id, input.email, input.name);
+    } catch (err) {
+      // Never leave someone marked admin without a way to sign in.
+      await db.from("profiles").update({ is_admin: false }).eq("id", row.id);
+      throw new Error(`${input.name} was added, but not as an admin: ${err instanceof Error ? err.message : "the sign-in account could not be created"}`);
+    }
+  }
   await audit("create", "user", row.id, null, input);
   await recompute();
   return { password };
@@ -304,7 +313,14 @@ export async function setAdminAccess(userId: string, grant: boolean): Promise<{ 
   const updated = must(await db.from("profiles").update({ is_admin: grant }).eq("id", userId).select("id"), "Saving admin access") as unknown[];
   if (updated.length !== 1) throw new Error("Only admins can change admin access.");
   let password: string | null = null;
-  if (grant && !contact.authUserId) password = await createLogin(userId, contact.email, person.name);
+  if (grant && !contact.authUserId) {
+    try {
+      password = await createLogin(userId, contact.email, person.name);
+    } catch (err) {
+      await db.from("profiles").update({ is_admin: false }).eq("id", userId);
+      throw err;
+    }
+  }
   if (contact.authUserId) {
     // Removing admin access also stops them signing in; granting it again lets them back in.
     const { error } = await createAdminClient().auth.admin.updateUserById(contact.authUserId, { ban_duration: grant ? "none" : "876000h" });

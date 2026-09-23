@@ -92,7 +92,7 @@ export default async function TeamsAdmin({ searchParams }: PageProps<"/admin/tea
                       <span className="block truncate text-xs text-muted">{contacts.get(u.id)?.email ?? ""} · {team?.name ?? "No team"}</span>
                     </span>
                     {team?.leadUserId === u.id && <Chip>Captain</Chip>}
-                    {u.isAdmin && <Chip tone="info">Admin</Chip>}
+                    {u.isAdmin && (contacts.get(u.id)?.authUserId ? <Chip tone="info">Admin</Chip> : <Chip tone="warn">Admin · no sign-in yet</Chip>)}
                     {!u.active && <Chip tone="warn">Inactive</Chip>}
                     <span className="text-sm font-semibold text-night-3 group-open:hidden">Edit</span>
                   </summary>
@@ -124,7 +124,14 @@ export default async function TeamsAdmin({ searchParams }: PageProps<"/admin/tea
                     </form>
                     <div className="mt-3 border-t border-line-2 pt-3">
                       <div className="flex flex-wrap items-start gap-2">
-                        <AdminAccessForm userId={u.id} grant={!u.isAdmin} />
+                        {u.isAdmin && !contacts.get(u.id)?.authUserId ? (
+                          <>
+                            <AdminAccessForm userId={u.id} grant label="Create their sign-in" />
+                            <AdminAccessForm userId={u.id} grant={false} />
+                          </>
+                        ) : (
+                          <AdminAccessForm userId={u.id} grant={!u.isAdmin} />
+                        )}
                         {u.isAdmin && contacts.get(u.id)?.authUserId && <ResetPasswordForm userId={u.id} name={u.name} />}
                       </div>
                     </div>

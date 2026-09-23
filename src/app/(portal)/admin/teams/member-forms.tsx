@@ -55,13 +55,13 @@ export function ResetPasswordForm({ userId, name }: { userId: string; name: stri
   );
 }
 
-export function AdminAccessForm({ userId, grant }: { userId: string; grant: boolean }) {
+export function AdminAccessForm({ userId, grant, label }: { userId: string; grant: boolean; label?: string }) {
   const [state, action] = useActionState<MemberState | null, FormData>(changeAdminAccess, null);
   return (
     <form action={action} className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="userId" value={userId} />
       <input type="hidden" name="grant" value={grant ? "yes" : "no"} />
-      <SubmitButton variant="secondary">{grant ? "Make admin" : "Remove admin access"}</SubmitButton>
+      <SubmitButton variant="secondary">{label ?? (grant ? "Make admin" : "Remove admin access")}</SubmitButton>
       <Result state={state} />
     </form>
   );
