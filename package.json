@@ -12,7 +12,9 @@
     "setup": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/setup.ts",
     "seed:demo": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/seed-demo.ts",
     "check": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/check.ts",
-    "backup": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/backup.ts"
+    "backup": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/backup.ts",
+    "sync:sheet": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/sync-sheet.ts",
+    "test:sheet": "node --experimental-strip-types --no-warnings src/lib/server/sheet.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

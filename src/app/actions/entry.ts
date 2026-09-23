@@ -3,9 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { isValidISODate } from "@/lib/engine/dates";
 import { requireAdmin } from "@/lib/server/auth";
-import { dateProblem, findUser, listContacts, listTeams, saveDay, type DayRowInput } from "@/lib/server/data";
+import { dateProblem, saveDay, type DayRowInput } from "@/lib/server/data";
 import { getPortal } from "@/lib/server/season";
-import { pushToSheets, sheetsEnabled } from "@/lib/server/sheets";
 
 export interface SaveState {
   ok: boolean;
@@ -15,7 +14,7 @@ export interface SaveState {
 }
 
 export async function saveEntries(_prev: SaveState | null, formData: FormData): Promise<SaveState> {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const teamId = String(formData.get("teamId") ?? "");
   const date = String(formData.get("date") ?? "");
   if (!isValidISODate(date)) return { ok: false, message: "That date isn't valid." };
@@ -47,23 +46,6 @@ export async function saveEntries(_prev: SaveState | null, formData: FormData): 
   try {
     const { changed } = await saveDay(teamId, date, rows);
     revalidatePath("/", "layout");
-    if (changed > 0 && sheetsEnabled()) {
-      const team = (await listTeams()).find((t) => t.id === teamId)?.name ?? "";
-      const contacts = await listContacts();
-      const sheetRows = await Promise.all(
-        rows.map(async (r) => ({
-          date,
-          name: (await findUser(r.userId))?.name,
-          email: contacts.get(r.userId)?.email,
-          team,
-          steps: r.steps ?? "",
-          onLeave: r.leave ? "yes" : "",
-          updatedBy: admin.name,
-          updatedAt: new Date().toISOString(),
-        })),
-      );
-      await pushToSheets("entries", sheetRows);
-    }
     const time = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     return {
       ok: true,

@@ -27,7 +27,7 @@ import {
 import { seedDemo } from "@/lib/server/seed";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/env";
-import { pushToSheets } from "@/lib/server/sheets";
+import { describeSync, syncFromSheet } from "@/lib/server/sheet-sync";
 
 const errText = (e: unknown, fallback = "Something went wrong.") => (e instanceof Error ? e.message : fallback);
 
@@ -285,8 +285,13 @@ export async function importCsv(_prev: ImportState | null, formData: FormData): 
 
 export async function syncSheets() {
   await requireAdmin();
-  const res = await pushToSheets("full", await exportRows());
-  done("/admin/data", res.message, res.ok ? "ok" : "err");
+  try {
+    const result = await syncFromSheet(createAdminClient());
+    revalidatePath("/", "layout");
+    done("/admin/data", describeSync(result), result.unmatchedPlayers.length || result.problems.length ? "err" : "ok");
+  } catch (e) {
+    done("/admin/data", errText(e, "Could not read the Google Sheet."), "err");
+  }
 }
 
 export async function resetDemo() {

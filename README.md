@@ -61,6 +61,8 @@ demo admin sign-in and a **Reset demo data** button.
 | `npm run seed:demo` | Replace everything with demo data (asks first) |
 | `npm run check` | Check `.env.local` points at a set-up Supabase project |
 | `npm run backup` | Save every table to `backups/<timestamp>.json` |
+| `npm run sync:sheet` | Pull steps from the Google Sheet now |
+| `npm run test:sheet` | Tests for reading the Google Sheet |
 
 ## How it's built
 
@@ -102,8 +104,10 @@ scripts/               setup and demo seeding
 
 - **Everyone (no sign-in):** home, standings, schedule, teams, players (each person's
   progress), leaderboards, awards and rules. The site is open and read-only.
+- **Daily steps come from a Google Sheet**, pulled in once a day and on demand. See
+  [docs/google-sheet.md](docs/google-sheet.md).
 - **Admins** sign in from the "Admin sign-in" link at the bottom of any page. Only they can
-  enter steps (any team, any day of the season up to today), mark leave, and use the Admin
+  enter steps by hand (any team, any day of the season up to today), mark leave, and use the Admin
   area: season dates and rules, teams, captains, members and admin access, fixtures and
   challenges, leave records, CSV import and export, Sheets backup, weekly recap and audit log.
 
@@ -151,8 +155,9 @@ See `.env.example`:
   so their email addresses can be anything.
 - `DEMO_MODE`: demo sign-in buttons and **Reset demo data**.
 - `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`: used once by `npm run setup`.
-- `GOOGLE_SHEETS_WEBHOOK_URL`, `GOOGLE_SHEETS_SECRET`: optional Sheets backup, see
-  [docs/google-sheets.md](docs/google-sheets.md).
+- `GOOGLE_SHEET_ID`, `GOOGLE_SHEET_TAB`: the Google Sheet daily steps are read from, see
+  [docs/google-sheet.md](docs/google-sheet.md).
+- `CRON_SECRET`: protects the scheduled sheet sync.
 
 ## Good to know
 
@@ -163,8 +168,7 @@ See `.env.example`:
   in the database rules.
 - **Backups:** Supabase's free tier has no automatic backups you can restore yourself. Run
   `npm run backup` (whole database to a JSON file, ignored by Git), use
-  **Admin → Data & corrections → Download all entries (CSV)**, or turn on the Google Sheets
-  backup.
+  **Admin → Data & corrections → Download all entries (CSV)**.
 - **Free-tier pausing:** Supabase pauses free projects after a week with no activity. During the
   season, daily entries keep it awake; if it pauses between seasons, resume it from the
   Supabase dashboard.
