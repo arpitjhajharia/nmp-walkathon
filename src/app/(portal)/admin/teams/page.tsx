@@ -4,11 +4,12 @@ import { Field, inputCls } from "@/components/fields";
 import { Flash } from "@/components/flash";
 import { TEAM_ICONS, TeamIcon } from "@/components/team";
 import { Card, Chip, SectionTitle } from "@/components/ui";
-import { getSettings, listContacts, listTeams, listUsers } from "@/lib/server/data";
+import { getSettings, listContacts, listTeams, listUsers, signInDomains } from "@/lib/server/data";
 import { AddMemberForm, AdminAccessForm, ResetPasswordForm } from "./member-forms";
 
 export default async function TeamsAdmin({ searchParams }: PageProps<"/admin/teams">) {
   const [teams, users, settings, contacts] = await Promise.all([listTeams(), listUsers(), getSettings(), listContacts()]);
+  const domains = signInDomains();
   const unassigned = users.filter((u) => !u.teamId);
 
   return (
@@ -65,7 +66,12 @@ export default async function TeamsAdmin({ searchParams }: PageProps<"/admin/tea
       </section>
 
       <section className="mt-10">
-        <SectionTitle title="Add a member" sub="People don't need an account to view the site. Only admins get a sign-in (and a temporary password to share)." />
+        <SectionTitle
+          title="Add a member"
+          sub={`People don't need an account to view the site. Only admins get a sign-in (and a temporary password to share)${
+            domains.length ? `, and admins must use a ${domains.map((d) => `@${d}`).join(" or ")} email` : ""
+          }.`}
+        />
         <Card className="p-5">
           <AddMemberForm teams={teams.map((t) => ({ id: t.id, name: t.name }))} />
         </Card>

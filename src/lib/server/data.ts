@@ -225,8 +225,25 @@ export function temporaryPassword(): string {
 /** Emails and sign-in links for everyone (admins only; the database returns nothing otherwise). */
 export const listContacts = cache(async (): Promise<Map<string, Contact>> => loadContacts(await userDb()));
 
+/** Domains allowed to sign in, from ALLOWED_EMAIL_DOMAIN ("company.com", "@company.com" or a list). */
+export function signInDomains(): string[] {
+  return (process.env.ALLOWED_EMAIL_DOMAIN ?? "")
+    .split(",")
+    .map((d) => d.trim().toLowerCase().replace(/^@/, ""))
+    .filter(Boolean);
+}
+
+/** Admins have to be able to sign in, so their email must match ALLOWED_EMAIL_DOMAIN. */
+function checkCanSignIn(email: string): void {
+  const domains = signInDomains();
+  if (domains.length && !domains.some((d) => email.toLowerCase().endsWith(`@${d}`))) {
+    throw new Error(`Admins sign in with a ${domains.map((d) => `@${d}`).join(" or ")} email. Change their email address first.`);
+  }
+}
+
 /** Create a sign-in account for an admin and link it. Returns the temporary password. */
 async function createLogin(profileId: string, email: string, name: string): Promise<string> {
+  checkCanSignIn(email);
   const password = temporaryPassword();
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name } });
@@ -282,6 +299,7 @@ export async function setAdminAccess(userId: string, grant: boolean): Promise<{ 
   const person = await findUser(userId);
   const contact = (await listContacts()).get(userId);
   if (!person || !contact) throw new Error("That member no longer exists.");
+  if (grant) checkCanSignIn(contact.email);
   const db = await userDb();
   const updated = must(await db.from("profiles").update({ is_admin: grant }).eq("id", userId).select("id"), "Saving admin access") as unknown[];
   if (updated.length !== 1) throw new Error("Only admins can change admin access.");
