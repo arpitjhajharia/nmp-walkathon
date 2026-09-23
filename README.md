@@ -2,8 +2,8 @@
 
 A 100-day office walking league: four teams of five, daily step points, weekly
 head-to-head fixtures, a league table, monthly cups, a Final Sprint, individual awards,
-badges and optional weekly challenges. Anyone can follow along without signing in; admins
-enter steps and everything else updates automatically.
+badges and optional weekly challenges. Anyone can follow along without signing in; daily
+steps arrive from a Google Sheet and everything else updates automatically.
 
 ## Setup
 
@@ -102,14 +102,15 @@ scripts/               setup and demo seeding
 
 ## Who can do what
 
-- **Everyone (no sign-in):** home, standings, schedule, teams, players (each person's
-  progress), leaderboards, awards and rules. The site is open and read-only.
+- **Everyone (no sign-in):** home, standings, schedule, teams & players (the squads and the
+  individual rankings on one page, each person's progress behind their name), awards and
+  rules. The site is open and read-only.
 - **Daily steps come from a Google Sheet**, pulled in once a day and on demand. See
-  [docs/google-sheet.md](docs/google-sheet.md).
+  [docs/google-sheet.md](docs/google-sheet.md). Nobody types steps into the portal.
 - **Admins** sign in from the "Admin sign-in" link at the bottom of any page. Only they can
-  enter steps by hand (any team, any day of the season up to today), mark leave, and use the Admin
-  area: season dates and rules, teams, captains, members and admin access, fixtures and
-  challenges, leave records, CSV import and export, Sheets backup, weekly recap and audit log.
+  use the Admin area: season dates and rules, teams, captains, members and admin access,
+  fixtures and challenges, leave records, the sheet sync, CSV import and export, weekly recap
+  and audit log.
 
 People don't need accounts. Only admins get a sign-in (with a temporary password to share,
 which they can change under **Account**). Each team can have a **captain**, shown on the

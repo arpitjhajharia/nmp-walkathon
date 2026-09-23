@@ -95,18 +95,7 @@ async function effectiveDate(): Promise<ISODate> {
   return today > s.startDate ? today : s.startDate;
 }
 
-// ───────────────────────── Editable dates (for friendly messages; the database enforces) ─────────────────────────
-
-/** Admins can enter any day of the season up to today. Returns a reason when they can't. */
-export async function dateProblem(date: ISODate): Promise<string | null> {
-  const s = await getSettings();
-  const end = addDays(s.startDate, s.lengthDays - 1);
-  if (date < s.startDate || date > end) return "This date is outside the competition.";
-  if (date > todayFor(s.timezone)) return "Future dates open on the day.";
-  return null;
-}
-
-// ───────────────────────── Daily entry ─────────────────────────
+// ───────────────────────── Daily steps ─────────────────────────
 
 export interface DayRowInput {
   userId: string;

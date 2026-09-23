@@ -48,8 +48,10 @@ CRON_SECRET=a-long-random-string      # optional but recommended; openssl rand -
 
 Every change a sync makes is written to the audit log, marked "Google Sheet sync".
 
-## Editing in the portal
+## Corrections
 
-Admins can still enter or correct steps in **Enter steps**. Be aware that if the sheet has a
-value for that person and day, the next sync overwrites the portal's value: the sheet wins.
-For a lasting correction, change the sheet.
+The sheet is the only place steps are typed: there is no step form in the portal, because the
+next sync would overwrite whatever was typed there. To fix a number, fix the cell and sync.
+
+The one-off CSV import under **Admin → Data & corrections** is the exception, for backfilling
+days the sheet never covered. A cell in the sheet still wins on the next sync.

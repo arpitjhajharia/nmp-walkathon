@@ -1,4 +1,4 @@
-import { CalendarClock, ClipboardList, PencilLine, Users } from "lucide-react";
+import { CalendarClock, ClipboardList, Footprints, Users } from "lucide-react";
 import Link from "next/link";
 import { CopyButton } from "@/components/client";
 import { Flash } from "@/components/flash";
@@ -26,10 +26,10 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
           { icon: CalendarClock, label: "Season", value: s.phase === "live" ? `Day ${s.dayNumber} / ${s.settings.lengthDays}` : s.phase === "pre" ? "Not started" : "Finished", href: "/admin/season" },
           { icon: Users, label: "Participants", value: `${s.participants.length} in ${s.teams.length} teams`, href: "/admin/teams" },
           {
-            icon: PencilLine,
-            label: "Entered today",
+            icon: Footprints,
+            label: "Steps in for today",
             value: `${s.participants.filter((m) => { const d = s.memberDay(m.id, s.today); return d.leave || d.steps !== null; }).length} / ${s.participants.length}`,
-            href: "/entry",
+            href: "/admin/data",
           },
         ].map((x) => (
           <Link key={x.label} href={x.href} className="rounded-2xl border border-line bg-surface p-4 hover:shadow-sm">
@@ -43,7 +43,7 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
 
       {statusDays.length > 0 && (
         <section className="mt-8">
-          <SectionTitle title="Entry status" sub="Tap a status to enter or correct that team's day." />
+          <SectionTitle title="Entry status" sub="Steps arrive from the Google Sheet. A gap means nobody has filled that day in yet." />
           <Card className="overflow-x-auto">
             <table className="w-full min-w-[420px] text-sm">
               <thead>
@@ -65,11 +65,9 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
                       const td = s.teamDay(t.id, d);
                       return (
                         <td key={d} className="px-4 py-2.5">
-                          <Link href={`/entry?date=${d}&team=${t.id}`} className="hover:underline">
-                            <Chip tone={td.status === "complete" ? "good" : td.status === "partial" ? "warn" : "neutral"}>
-                              {td.status === "complete" ? "Complete" : td.status === "partial" ? `Partial ${td.recorded}/${td.members}` : "Not entered"}
-                            </Chip>
-                          </Link>
+                          <Chip tone={td.status === "complete" ? "good" : td.status === "partial" ? "warn" : "neutral"}>
+                            {td.status === "complete" ? "Complete" : td.status === "partial" ? `Partial ${td.recorded}/${td.members}` : "Not entered"}
+                          </Chip>
                         </td>
                       );
                     })}
@@ -117,7 +115,7 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
         <SectionTitle title="Quick links" />
         <ul className="grid gap-2 sm:grid-cols-2">
           {[
-            ["/entry", "Enter today's steps"],
+            ["/admin/data", "Pull the latest steps from the Google Sheet"],
             ["/admin/schedule", "Pick next week's challenge"],
             ["/admin/teams", "Add a member, change a captain or give admin access"],
             ["/admin/audit", "See who changed what"],

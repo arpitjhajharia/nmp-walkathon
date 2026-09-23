@@ -23,7 +23,7 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const signedIn = Boolean(data?.claims?.sub);
   const path = request.nextUrl.pathname;
-  const adminOnly = path === "/entry" || path === "/account" || path === "/admin" || path.startsWith("/admin/");
+  const adminOnly = path === "/account" || path === "/admin" || path.startsWith("/admin/");
   if (!signedIn && adminOnly) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

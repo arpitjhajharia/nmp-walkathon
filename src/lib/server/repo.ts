@@ -32,16 +32,10 @@ export interface SeasonRow {
   rules: Partial<Settings>;
 }
 
-export interface EntryMeta {
-  updatedBy: string | null;
-  updatedAt: string;
-}
-
 export interface LoadedData {
   season: SeasonRow;
   snapshot: Snapshot;
   users: UserRecord[];
-  entryMeta: Map<string, EntryMeta>;
 }
 
 type Result<T> = { data: T | null; error: { message: string } | null };
@@ -124,8 +118,8 @@ export async function loadData(db: SupabaseClient, season: SeasonRow): Promise<L
   const [teams, users, entries, leaves, fixtures, challenges, memberships] = await Promise.all([
     loadTeams(db, sid),
     loadUsers(db, sid),
-    fetchAll<{ user_id: string; date: string; steps: number; updated_by: string | null; updated_at: string }>(
-      (a, b) => db.from("step_entries").select("user_id, date, steps, updated_by, updated_at").eq("season_id", sid).order("date").order("user_id").range(a, b),
+    fetchAll<{ user_id: string; date: string; steps: number }>(
+      (a, b) => db.from("step_entries").select("user_id, date, steps").eq("season_id", sid).order("date").order("user_id").range(a, b),
       "Loading steps",
     ),
     fetchAll<{ user_id: string; date: string }>((a, b) => db.from("leave_records").select("user_id, date").eq("season_id", sid).order("date").order("user_id").range(a, b)),
@@ -137,12 +131,9 @@ export async function loadData(db: SupabaseClient, season: SeasonRow): Promise<L
       (a, b) => db.from("membership_history").select("user_id, team_id, from_date, to_date").eq("season_id", sid).order("from_date").order("user_id").range(a, b),
     ),
   ]);
-  const entryMeta = new Map<string, EntryMeta>();
-  for (const e of entries) entryMeta.set(`${e.user_id}|${e.date}`, { updatedBy: e.updated_by, updatedAt: e.updated_at });
   return {
     season,
     users,
-    entryMeta,
     snapshot: {
       settings: settingsOf(season),
       teams,

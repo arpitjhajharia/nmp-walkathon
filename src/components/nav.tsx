@@ -10,11 +10,8 @@ import {
   LayoutList,
   LogIn,
   LogOut,
-  Medal,
   Menu,
-  PencilLine,
   Settings,
-  TrendingUp,
   Users,
   X,
   type LucideIcon,
@@ -33,9 +30,7 @@ const BASE: Item[] = [
   { href: "/", label: "Home", icon: Home },
   { href: "/standings", label: "Standings", icon: LayoutList },
   { href: "/schedule", label: "Schedule", icon: CalendarDays },
-  { href: "/teams", label: "Teams", icon: Users },
-  { href: "/players", label: "Players", icon: TrendingUp },
-  { href: "/leaderboard", label: "Leaders", icon: Medal },
+  { href: "/teams", label: "Teams & players", icon: Users },
   { href: "/awards", label: "Awards", icon: Award },
   { href: "/rules", label: "Rules", icon: BookOpen },
 ];
@@ -51,22 +46,9 @@ export function Nav({ adminName, dayLabel, signOut }: { adminName: string | null
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const items: Item[] = [
-    ...BASE,
-    ...(isAdmin
-      ? [
-          { href: "/entry", label: "Enter steps", icon: PencilLine },
-          { href: "/admin", label: "Admin", icon: Settings },
-        ]
-      : []),
-  ];
+  const items: Item[] = [...BASE, ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: Settings }] : [])];
   const menuItems = isAdmin ? [...items, ACCOUNT] : items;
-  const bottom: Item[] = [
-    BASE[0],
-    BASE[1],
-    isAdmin ? { href: "/entry", label: "Enter", icon: PencilLine } : BASE[2],
-    BASE[5],
-  ];
+  const bottom: Item[] = [BASE[0], BASE[1], BASE[2], { ...BASE[3], label: "Teams" }];
 
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
@@ -104,7 +86,7 @@ export function Nav({ adminName, dayLabel, signOut }: { adminName: string | null
                     aria-current={isActive(pathname, it.href) ? "page" : undefined}
                     className={`rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-colors ${
                       isActive(pathname, it.href) ? "bg-white/15 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
-                    } ${it.href === "/entry" ? "text-accent" : ""}`}
+                    }`}
                   >
                     {it.label}
                   </Link>
@@ -192,7 +174,7 @@ export function Nav({ adminName, dayLabel, signOut }: { adminName: string | null
                   aria-current={active ? "page" : undefined}
                   className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${active ? "text-ink" : "text-muted"}`}
                 >
-                  <span className={`inline-flex h-7 w-12 items-center justify-center rounded-full ${active ? "bg-line-2" : ""} ${it.href === "/entry" ? "bg-night text-accent" : ""}`}>
+                  <span className={`inline-flex h-7 w-12 items-center justify-center rounded-full ${active ? "bg-line-2" : ""}`}>
                     <it.icon className="size-5" aria-hidden="true" />
                   </span>
                   {it.label}
