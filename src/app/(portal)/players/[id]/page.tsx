@@ -8,6 +8,8 @@ import { BADGES, nextBand, sortedBands } from "@/lib/engine/engine";
 import { notFound } from "next/navigation";
 import { getPortal } from "@/lib/server/season";
 
+const SHADES = ["#c3cad5", "#8aa2c8", "#4b6a9b", "#213a63", "#0d1b2e"];
+
 export async function generateMetadata({ params }: PageProps<"/players/[id]">): Promise<Metadata> {
   const { id } = await params;
   return { title: (await getPortal()).users.get(id)?.name ?? "Player" };
@@ -40,6 +42,13 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
     H = 180,
     barW = W / Math.max(days.length, 1);
   const y = (v: number) => H - (Math.min(v, top) / top) * H;
+  // One shade per band, darkest at the top, so the ramp follows the band table however it
+  // is configured rather than assuming a particular number of points.
+  const shadeFor = (points: number) => {
+    const i = bands.findIndex((b) => b.points === points);
+    if (i < 0) return SHADES[0];
+    return SHADES[Math.round((i / Math.max(1, bands.length - 1)) * (SHADES.length - 1))];
+  };
   const challenge = s.currentWeek ? s.challenges.find((c) => c.weekIndex === s.currentWeek!.index) : undefined;
   const myChallenge = challenge?.progress.find((p) => p.userId === id);
   const earned = st.badges.filter((b) => b.unlockedOn);
@@ -118,7 +127,7 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
                   ))}
                 {values.map((v, i) => {
                   const h = v.steps ? H - y(v.steps) : 0;
-                  const fill = v.points === 0 ? "#c3cad5" : v.points >= 4 ? "#0d1b2e" : v.points >= 3 ? "#213a63" : v.points >= 2 ? "#4b6a9b" : "#8aa2c8";
+                  const fill = shadeFor(v.points);
                   return (
                     <g key={days[i]}>
                       <title>{`${formatShort(days[i])}: ${v.leave ? "on leave" : v.steps === null ? "no entry" : `${fmt(v.steps)} steps, ${v.points} pts`}`}</title>

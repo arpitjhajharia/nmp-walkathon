@@ -33,9 +33,15 @@ export function maxDailyPoints(bands: Band[]): number {
   return Math.max(0, ...bands.map((b) => b.points));
 }
 
-/** Minimum steps that earn any team point (5,000 by default). */
+/**
+ * Minimum steps that earn more than the base band (5,000 by default). Streaks, consistency
+ * and active-day counts hang off this, so it has to mean a real walk rather than the point
+ * every recorded day is already worth.
+ */
 export function activeThreshold(bands: Band[]): number {
-  return sortedBands(bands).find((b) => b.points > 0)?.min ?? 5000;
+  const sorted = sortedBands(bands);
+  const base = sorted[0]?.points ?? 0;
+  return sorted.find((b) => b.points > base)?.min ?? 5000;
 }
 
 /** The next band above the given step count, or null when already in the top band. */
@@ -673,7 +679,7 @@ export function computeSeason(snap: Snapshot, today: ISODate): Season {
           const md = memberDay(m.id, d);
           if (md.leave) continue;
           possible++;
-          if (md.points > 0) active++;
+          if ((md.steps ?? 0) >= activeSteps) active++;
         }
         return { t, rate: possible ? Math.round((active / possible) * 1000) / 10 : 0 };
       });
@@ -767,7 +773,7 @@ const word = (n: number) => WORDS[n] ?? String(n);
 /** One short, encouraging "What matters today" line. */
 export function todayInsight(s: Season): string {
   const teamName = (id: string) => s.teams.find((t) => t.id === id)?.name ?? "A team";
-  if (s.phase === "pre") return `The season starts ${formatRange(s.start, s.start)}. Every 5,000-step day earns your team a point.`;
+  if (s.phase === "pre") return `The season starts ${formatRange(s.start, s.start)}. Every day you record earns your team a point, and the steps decide how many more.`;
   if (s.phase === "finished") return "The season is complete. Thank you for every step.";
 
   // 1. A close live fixture
@@ -806,7 +812,14 @@ export function todayInsight(s: Season): string {
     return `${word(n)} ${n === 1 ? "person is" : "people are"} one day away from a new streak badge.`;
   }
 
-  return `Every day at ${fmtNum(s.activeSteps)}+ steps earns a point, and 12,000 steps earns the full four.`;
+  const sorted = sortedBands(s.settings.bands);
+  const base = sorted[0].points;
+  const top = sorted[sorted.length - 1];
+  const opener =
+    base > 0
+      ? `Every day you record earns your team ${base === 1 ? "a point" : `${word(base).toLowerCase()} points`}`
+      : `Every day at ${fmtNum(s.activeSteps)}+ steps earns a point`;
+  return `${opener}, and ${fmtNum(top.min)} steps earns the full ${word(top.points).toLowerCase()}.`;
 }
 
 /** Plain-text weekly recap for pasting into an office chat. */

@@ -4,23 +4,29 @@ import { test } from "node:test";
 import { addDays, mondayOf, weekday } from "./dates.ts";
 import { DEFAULT_SETTINGS } from "./defaults.ts";
 import { buildDemoData } from "./demo.ts";
-import { computeSeason, generateFixtures, nextBand, pointsFor, todayInsight, weeklyRecap } from "./engine.ts";
+import { activeThreshold, computeSeason, generateFixtures, maxDailyPoints, nextBand, pointsFor, todayInsight, weeklyRecap } from "./engine.ts";
 import type { Entry, Leave, Member, Snapshot } from "./types.ts";
 
 const bands = DEFAULT_SETTINGS.bands;
 
-test("step bands", () => {
-  assert.equal(pointsFor(0, bands), 0);
-  assert.equal(pointsFor(4999, bands), 0);
-  assert.equal(pointsFor(5000, bands), 1);
-  assert.equal(pointsFor(7999, bands), 1);
-  assert.equal(pointsFor(8000, bands), 2);
-  assert.equal(pointsFor(10000, bands), 3);
-  assert.equal(pointsFor(11999, bands), 3);
-  assert.equal(pointsFor(12000, bands), 4);
-  assert.equal(pointsFor(60000, bands), 4, "contribution is capped");
-  assert.deepEqual(nextBand(8200, bands), { min: 10000, points: 3, gap: 1800 });
+test("step bands run from one to five", () => {
+  assert.equal(pointsFor(0, bands), 1, "a recorded day is never worth nothing");
+  assert.equal(pointsFor(4999, bands), 1);
+  assert.equal(pointsFor(5000, bands), 2);
+  assert.equal(pointsFor(7999, bands), 2);
+  assert.equal(pointsFor(8000, bands), 3);
+  assert.equal(pointsFor(10000, bands), 4);
+  assert.equal(pointsFor(11999, bands), 4);
+  assert.equal(pointsFor(12000, bands), 5);
+  assert.equal(pointsFor(60000, bands), 5, "contribution is capped");
+  assert.equal(maxDailyPoints(bands), 5);
+  assert.deepEqual(nextBand(8200, bands), { min: 10000, points: 4, gap: 1800 });
   assert.equal(nextBand(15000, bands), null);
+});
+
+test("the active threshold is a real walk, not the base point", () => {
+  assert.equal(activeThreshold(bands), 5000, "the free point at 0 steps does not count as active");
+  assert.equal(activeThreshold([{ min: 0, points: 0 }, { min: 6000, points: 1 }]), 6000, "still works for a zero-based scale");
 });
 
 test("fixtures rotate so every pair meets every three weeks", () => {
@@ -63,8 +69,8 @@ test("daily team score, leave and missing entries", () => {
     "2026-08-04",
   );
   const td = s.teamDay("a", d);
-  assert.equal(td.earned, 4 + 2 + 0);
-  assert.equal(td.possible, 16, "on-leave member excluded from possible points");
+  assert.equal(td.earned, 5 + 3 + 1, "even a 4,000-step day is worth a point");
+  assert.equal(td.possible, 20, "on-leave member excluded from possible points");
   assert.equal(td.status, "partial", "a5 has no entry");
   assert.equal(s.memberDay("a5", d).points, 0, "missing entry earns nothing");
 });
@@ -126,8 +132,8 @@ test("scores stop at yesterday, and so do possible points", () => {
   assert.equal(s.stats.get("a1")!.totalSteps, 12000, "today's steps wait for tomorrow");
   const f = s.fixtures.find((x) => x.week.index === 0 && (x.home.teamId === "a" || x.away.teamId === "a"))!;
   const a = f.home.teamId === "a" ? f.home : f.away;
-  assert.equal(a.points, 4);
-  assert.equal(a.possible, 40, "two counted days, five members, four points each");
+  assert.equal(a.points, 5);
+  assert.equal(a.possible, 50, "two counted days, five members, five points each");
 });
 
 test("day one has nothing to score yet", () => {
@@ -208,11 +214,11 @@ test("moving teams keeps past steps with the old team", () => {
     { userId: "a1", teamId: "b", from: "2026-08-06", to: null },
   ];
   const s = computeSeason(snap, "2026-08-07");
-  assert.equal(s.teamDay("a", "2026-08-04").earned, 4, "old team keeps the points");
+  assert.equal(s.teamDay("a", "2026-08-04").earned, 5, "old team keeps the points");
   assert.equal(s.teamDay("b", "2026-08-04").earned, 0);
   assert.equal(s.teamDay("a", "2026-08-06").earned, 0);
-  assert.equal(s.teamDay("b", "2026-08-06").earned, 4, "new team gets points from the move date");
-  assert.equal(s.teamDay("a", "2026-08-06").possible, 16, "old team has four members after the move");
-  assert.equal(s.teamDay("b", "2026-08-06").possible, 24);
+  assert.equal(s.teamDay("b", "2026-08-06").earned, 5, "new team gets points from the move date");
+  assert.equal(s.teamDay("a", "2026-08-06").possible, 20, "old team has four members after the move");
+  assert.equal(s.teamDay("b", "2026-08-06").possible, 30);
   assert.equal(s.stats.get("a1")!.totalSteps, 24000, "personal totals follow the person");
 });

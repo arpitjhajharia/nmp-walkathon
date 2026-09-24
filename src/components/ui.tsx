@@ -139,7 +139,7 @@ export function FormGuide({ form }: { form: FormResult[] }) {
 }
 
 /** Point-band pips: filled dots for points earned, plus the number for non-visual readers. */
-export function Pips({ points, max = 4, dark = false }: { points: number; max?: number; dark?: boolean }) {
+export function Pips({ points, max = 5, dark = false }: { points: number; max?: number; dark?: boolean }) {
   return (
     <span className="inline-flex items-center gap-1" aria-label={`${points} of ${max} points`}>
       {Array.from({ length: max }, (_, i) => (

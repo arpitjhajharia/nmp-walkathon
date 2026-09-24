@@ -38,7 +38,11 @@ export default async function RulesPage() {
       <div className="grid gap-10 lg:grid-cols-[1fr_16rem]">
         <div className="space-y-10">
           <Block id="bands" title="Daily team points">
-            <p>Each day, your steps earn points for your team:</p>
+            <p>
+              {bands[0].points > 0
+                ? "Each day, your steps earn points for your team. Every day you record counts for something, however light it was:"
+                : "Each day, your steps earn points for your team:"}
+            </p>
             <Card className="overflow-hidden">
               <table className="tnum w-full text-sm">
                 <caption className="sr-only">Step bands and points</caption>
@@ -83,7 +87,7 @@ export default async function RulesPage() {
 
           <Block id="leave" title="Leave">
             <p>If you&apos;re on leave, let an admin know and they&apos;ll mark &ldquo;On leave&rdquo; for that day. You&apos;re left out of your team&apos;s possible points and your streak is paused, not broken.</p>
-            <p>A missing entry is different: it earns no points, and the portal never guesses or copies steps automatically.</p>
+            <p>A missing entry is different: it earns no points, and the portal never guesses or copies steps automatically. Filling in your number is the one thing worth doing every day.</p>
           </Block>
 
           <Block id="entry" title="Steps & the one-day delay">

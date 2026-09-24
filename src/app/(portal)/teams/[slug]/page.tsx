@@ -33,7 +33,7 @@ export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
       const md = s.memberDay(m.id, d.d);
       if (md.leave) continue;
       possibleDays++;
-      if (md.points > 0) activeDays++;
+      if ((md.steps ?? 0) >= s.activeSteps) activeDays++;
     }
   const participation = possibleDays ? Math.round((activeDays / possibleDays) * 100) : 0;
   const weekEarned = weekDays.reduce((a, x) => a + x.earned, 0);
@@ -58,7 +58,7 @@ export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
         id,
         name: nameOf(id),
         current: currentIds.has(id),
-        activeDays: days.filter((d) => d.points > 0).length,
+        activeDays: days.filter((d) => (d.steps ?? 0) >= s.activeSteps).length,
         points: days.reduce((a, d) => a + d.points, 0),
         steps: days.reduce((a, d) => a + (d.steps ?? 0), 0),
       };
