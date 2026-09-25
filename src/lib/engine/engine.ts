@@ -175,11 +175,29 @@ export interface BadgeStatus {
   target: number;
 }
 
+/** The three numbers every player table shows, in the order they break a tie. */
+export interface PlayerTotals {
+  points: number;
+  steps: number;
+  /** Steps per recorded day, or null before anything is recorded. */
+  avg: number | null;
+}
+
+/**
+ * How players are ordered wherever one is not explicitly sorted another way: team points
+ * first, because that is what the season is scored on, then steps, then the daily average.
+ */
+export function byPlayerTotals(a: PlayerTotals, b: PlayerTotals): number {
+  return b.points - a.points || b.steps - a.steps || (b.avg ?? 0) - (a.avg ?? 0);
+}
+
 export interface MemberStats {
   userId: string;
   teamId: string;
   totalSteps: number;
   daysRecorded: number;
+  /** Steps per recorded day. Null until a first day is recorded. */
+  avgSteps: number | null;
   consistencyDays: number;
   goalDays: number;
   pointsContributed: number;
@@ -217,6 +235,13 @@ export interface LeaderRow {
   rank: number;
   value: number;
   change: number | null;
+}
+
+export interface StepLeaders {
+  /** Most steps on the last counted day. */
+  yesterday: string[];
+  /** Most steps across the season so far. */
+  total: string[];
 }
 
 export interface ChallengeProgress {
@@ -278,7 +303,12 @@ export interface Season {
   finalSprint: TrophyRace;
   champion: string[];
   stats: Map<string, MemberStats>;
-  leaderboards: { total: LeaderRow[]; consistency: LeaderRow[]; improved: LeaderRow[]; week: LeaderRow[] };
+  leaderboards: { points: LeaderRow[]; total: LeaderRow[]; consistency: LeaderRow[]; improved: LeaderRow[]; week: LeaderRow[] };
+  /**
+   * The people out in front on raw steps, named so their effort can be badged wherever they
+   * appear. Joint holders all count; nobody holds an honour on zero steps.
+   */
+  stepLeaders: StepLeaders;
   weeklyAwards: WeeklyAwards[];
   challenges: WeekChallenge[];
   badgeUnlocks: BadgeUnlock[];
@@ -291,13 +321,18 @@ function sum(xs: number[]): number {
 }
 
 /** Standard competition ranking: equal values share a rank (1, 1, 3). */
-function rankBy<T>(items: T[], value: (t: T) => number): { item: T; rank: number }[] {
-  const sorted = [...items].sort((a, b) => value(b) - value(a));
+/** Ranks on a comparator. Entries the comparator cannot separate share a position. */
+function rankWith<T>(items: T[], cmp: (a: T, b: T) => number): { item: T; rank: number }[] {
+  const sorted = [...items].sort(cmp);
   return sorted.map((item, i) => {
     let rank = i + 1;
-    for (let j = i - 1; j >= 0 && value(sorted[j]) === value(item); j--) rank = j + 1;
+    for (let j = i - 1; j >= 0 && cmp(sorted[j], item) === 0; j--) rank = j + 1;
     return { item, rank };
   });
+}
+
+function rankBy<T>(items: T[], value: (t: T) => number): { item: T; rank: number }[] {
+  return rankWith(items, (a, b) => value(b) - value(a));
 }
 
 function topBy<T>(items: T[], value: (t: T) => number): T[] {
@@ -610,6 +645,7 @@ export function computeSeason(snap: Snapshot, today: ISODate): Season {
       teamId: m.teamId!,
       totalSteps: total,
       daysRecorded: recorded,
+      avgSteps: recorded ? total / recorded : null,
       consistencyDays: consistency,
       goalDays: goal,
       pointsContributed: contributed,
@@ -631,19 +667,43 @@ export function computeSeason(snap: Snapshot, today: ISODate): Season {
 
   // Leaderboards
   const statList = [...stats.values()];
+  const totalsOf = (s: MemberStats): PlayerTotals => ({ points: s.pointsContributed, steps: s.totalSteps, avg: s.avgSteps });
+  // Where each player stood last Sunday, on both orderings, so a board can show movement.
   const prevTotalRank = new Map<string, number>();
+  const prevPointsRank = new Map<string, number>();
   if (prevWeek) {
     const upTo = prevWeek.end;
-    const prevTotals = participants.map((m) => ({ id: m.id, v: stepsIn(m.id, countedDates.filter((d) => d <= upTo)) }));
+    const upToDates = countedDates.filter((d) => d <= upTo);
+    const prevTotals = participants.map((m) => ({ id: m.id, v: stepsIn(m.id, upToDates) }));
     for (const { item, rank } of rankBy(prevTotals, (x) => x.v)) prevTotalRank.set(item.id, rank);
+    const prevPoints = participants.map((m) => {
+      const days = upToDates.map((d) => memberDay(m.id, d)).filter((x) => !x.leave && x.steps !== null);
+      const steps = sum(days.map((x) => x.steps ?? 0));
+      return { id: m.id, points: sum(days.map((x) => x.points)), steps, avg: days.length ? steps / days.length : null };
+    });
+    for (const { item, rank } of rankWith(prevPoints, byPlayerTotals)) prevPointsRank.set(item.id, rank);
   }
   const board = (list: MemberStats[], value: (s: MemberStats) => number, change: (s: MemberStats, rank: number) => number | null): LeaderRow[] =>
     rankBy(list, value).map(({ item, rank }) => ({ userId: item.userId, rank, value: value(item), change: change(item, rank) }));
   const leaderboards = {
+    points: rankWith(statList, (a, b) => byPlayerTotals(totalsOf(a), totalsOf(b))).map(({ item, rank }) => ({
+      userId: item.userId,
+      rank,
+      value: item.pointsContributed,
+      change: prevPointsRank.has(item.userId) ? prevPointsRank.get(item.userId)! - rank : null,
+    })),
     total: board(statList, (s) => s.totalSteps, (s, rank) => (prevTotalRank.has(s.userId) ? prevTotalRank.get(s.userId)! - rank : null)),
     consistency: board(statList, (s) => s.consistencyDays, (s) => s.thisWeekActiveDays),
     improved: board(statList.filter((s) => s.improvementPct !== null), (s) => s.improvementPct!, () => null),
     week: board(statList, (s) => s.thisWeekSteps, (s) => (prevWeek ? s.thisWeekSteps - s.lastWeekSteps : null)),
+  };
+
+  // Two honours worth calling out by name: yesterday's biggest walk and the season's biggest
+  // total. A tie shares the honour; an empty field (nothing walked) awards nothing.
+  const leadersBy = (value: (s: MemberStats) => number) => topBy(statList, value).map((s) => s.userId);
+  const stepLeaders: StepLeaders = {
+    yesterday: leadersBy((s) => s.latest.steps ?? 0),
+    total: leadersBy((s) => s.totalSteps),
   };
 
   // Weekly awards (final after Sunday; the live week shows the race so far)
@@ -759,6 +819,7 @@ export function computeSeason(snap: Snapshot, today: ISODate): Season {
     champion,
     stats,
     leaderboards,
+    stepLeaders,
     weeklyAwards,
     challenges,
     badgeUnlocks,

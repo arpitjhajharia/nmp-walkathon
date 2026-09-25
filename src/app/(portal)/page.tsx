@@ -4,7 +4,8 @@ import { FixtureCard } from "@/components/fixture-card";
 import { CountUp } from "@/components/motion";
 import { StandingsTable } from "@/components/standings-table";
 import { TeamBadge, TeamIcon } from "@/components/team";
-import { Avatar, Card, Chip, EmptyState, Movement, Progress, SectionTitle, compact, fmt, joinNames } from "@/components/ui";
+import { PlayerTable, honoursFor } from "@/components/player-table";
+import { Card, Chip, EmptyState, Movement, Progress, SectionTitle, compact, fmt, joinNames } from "@/components/ui";
 import { diffDays, formatDay, formatRange, formatShort } from "@/lib/engine/dates";
 import { BADGES, todayInsight } from "@/lib/engine/engine";
 import { getPortal } from "@/lib/server/season";
@@ -40,7 +41,7 @@ export default async function HomePage() {
   });
   const leadPoints = ranking[0]?.points ?? 0;
 
-  const topWalkers = s.leaderboards.total.slice(0, 8);
+  const topWalkers = s.leaderboards.points.slice(0, 8);
 
   const challenge = week ? s.challenges.find((c) => c.weekIndex === week.index) : undefined;
   const challengeDone = challenge?.progress.filter((p) => p.completed).length ?? 0;
@@ -210,37 +211,31 @@ export default async function HomePage() {
             {!scored ? (
               <EmptyState title="No steps in yet" icon={<Footprints className="size-6" />} />
             ) : (
-              <Card as="div">
-                <ol className="divide-y divide-line-2">
-                  {topWalkers.map((r) => {
+              <Card as="div" className="p-0 sm:p-1">
+                <PlayerTable
+                  caption="Top walkers by team points"
+                  ranked
+                  changeLabel="Move"
+                  rows={topWalkers.map((r) => {
                     const st = s.stats.get(r.userId)!;
                     const team = teams.get(st.teamId);
-                    return (
-                      <li key={r.userId} className="flex items-center gap-3 px-4 py-2.5">
-                        <span className={`tnum w-6 shrink-0 text-center font-display text-lg font-bold ${r.rank <= 3 ? "text-accent-ink" : "text-muted"}`}>{r.rank}</span>
-                        <Avatar name={nameOf(r.userId)} color={team?.color} />
-                        <span className="min-w-0 flex-1">
-                          <Link href={`/players/${r.userId}`} className="block truncate font-semibold hover:underline">
-                            {nameOf(r.userId)}
-                          </Link>
-                          <span className="block truncate text-xs text-muted">{[team?.name, st.currentStreak >= 3 ? `${st.currentStreak}-day streak` : null].filter(Boolean).join(" · ")}</span>
-                        </span>
-                        <span className="shrink-0 text-right">
-                          <span className="tnum block font-display text-lg font-bold leading-tight">{fmt(st.totalSteps)}</span>
-                          <span className="tnum block text-xs text-muted">{st.pointsContributed} pts</span>
-                        </span>
-                        {r.change !== null && (
-                          <span className="w-9 shrink-0 text-right">
-                            <Movement value={r.change} />
-                          </span>
-                        )}
-                      </li>
-                    );
+                    return {
+                      userId: r.userId,
+                      name: nameOf(r.userId),
+                      color: team?.color,
+                      meta: [team?.name, st.currentStreak >= 3 ? `${st.currentStreak}-day streak` : null].filter(Boolean).join(" · "),
+                      rank: r.rank,
+                      points: st.pointsContributed,
+                      steps: st.totalSteps,
+                      avg: st.avgSteps,
+                      change: r.change === null ? null : <Movement value={r.change} />,
+                      honours: honoursFor(s.stepLeaders, r.userId),
+                    };
                   })}
-                </ol>
+                />
                 <p className="border-t border-line-2 px-4 py-2.5 text-xs text-muted">
-                  Ranked by total steps. Points are what each person contributed to their team.
-                  {lastWeek && " Arrows show movement since last Sunday."}
+                  Ranked by team points, then steps, then the daily average. Pts are what each person contributed to their team, and the average counts only days with an entry.
+                  {lastWeek && " Move shows the change since last Sunday."}
                 </p>
               </Card>
             )}

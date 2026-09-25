@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Tabs } from "@/components/tabs";
 import { TeamIcon } from "@/components/team";
-import { Avatar, Card, FormGuide, Movement, Notice, PageHeader, fmt } from "@/components/ui";
-import type { LeaderRow } from "@/lib/engine/engine";
-import type { Member, Team } from "@/lib/engine/types";
+import { PlayerTable, honoursFor, type PlayerRow } from "@/components/player-table";
+import { Card, FormGuide, Movement, Notice, PageHeader, fmt } from "@/components/ui";
+import type { LeaderRow, MemberStats } from "@/lib/engine/engine";
+import type { Member } from "@/lib/engine/types";
 import { getPortal } from "@/lib/server/season";
 
 export const metadata: Metadata = { title: "Teams & players" };
@@ -12,10 +13,11 @@ export const metadata: Metadata = { title: "Teams & players" };
 // One page for the squads and the individual rankings: the same numbers, either grouped by
 // team or as one long list. Picking a sort is what turns it into a leaderboard.
 const SORTS = [
-  { id: "league", teamsOnly: true, label: "League position", note: "Teams in league order. Members are listed alphabetically with their season steps." },
-  { id: "total", teamsOnly: false, label: "Total steps", note: "Highest cumulative steps this season. Arrows show movement since last Sunday." },
-  { id: "week", teamsOnly: false, label: "This week", note: "Steps since Monday. The small number is the change against last week's total." },
-  { id: "consistency", teamsOnly: false, label: "Consistency", note: "Most days at or above 5,000 steps. The small number shows days added this week." },
+  { id: "league", teamsOnly: true, label: "League position", note: "Teams in league order, members by points." },
+  { id: "points", teamsOnly: false, label: "Points", note: "Ranked on team points contributed, with steps then the daily average breaking ties." },
+  { id: "total", teamsOnly: false, label: "Total steps", note: "Highest cumulative steps this season. Move is the change since last Sunday." },
+  { id: "week", teamsOnly: false, label: "This week", note: "Ranked on steps since Monday, with the change against last week's total." },
+  { id: "consistency", teamsOnly: false, label: "Consistency", note: "Most days at or above 5,000 steps, and how many were added this week." },
   { id: "improved", teamsOnly: false, label: "Most improved", note: "Latest 7-day average against the first 7-day average. Only days with an entry count (at least 3 in each window)." },
 ] as const;
 type SortId = (typeof SORTS)[number]["id"];
@@ -28,8 +30,9 @@ export default async function TeamsPage({ searchParams }: PageProps<"/teams">) {
   const view = sp.view === "players" ? "players" : "teams";
   const asked = SORTS.find((x) => x.id === sp.sort);
   // League position has no meaning once the teams are off screen.
-  const sort: SortId = asked && !(asked.teamsOnly && view === "players") ? asked.id : view === "players" ? "total" : "league";
-  const metric: Metric = sort === "league" ? "total" : sort;
+  const sort: SortId = asked && !(asked.teamsOnly && view === "players") ? asked.id : view === "players" ? "points" : "league";
+  // The league view ranks teams, not people, so its member lists fall back to the default player order.
+  const metric: Metric = sort === "league" ? "points" : sort;
   const ranked = sort !== "league";
   const meta = SORTS.find((x) => x.id === sort)!;
 
@@ -38,39 +41,68 @@ export default async function TeamsPage({ searchParams }: PageProps<"/teams">) {
   const rowOf = new Map(board.map((r) => [r.userId, r]));
   const href = (v: string, srt: string) => `/teams?view=${v}&sort=${srt}`;
 
-  const valueOf = (userId: string) => {
-    const st = s.stats.get(userId)!;
+  const teamById = new Map(s.teams.map((t) => [t.id, t]));
+
+  // Points, steps and the daily average are always on show. A sort that measures something
+  // else earns one extra column, named once in the header.
+  const EXTRA: Partial<Record<Metric, string>> = { week: "This week", consistency: "5k+ days", improved: "7-day change" };
+  const extraLabel = EXTRA[metric];
+  const CHANGE: Partial<Record<Metric, string>> = { points: "Move", total: "Move", week: "Move", consistency: "Added" };
+  const changeLabel = ranked ? CHANGE[metric] : undefined;
+
+  const extraOf = (st: MemberStats) => {
     switch (metric) {
-      case "total":
-        return { main: fmt(st.totalSteps), unit: "steps" };
       case "week":
-        return { main: fmt(st.thisWeekSteps), unit: "steps" };
+        return fmt(st.thisWeekSteps);
       case "consistency":
-        return { main: String(st.consistencyDays), unit: st.consistencyDays === 1 ? "day" : "days" };
+        return String(st.consistencyDays);
       case "improved":
-        return st.improvementPct === null
-          ? { main: "–", unit: "not enough days yet" }
-          : { main: `${st.improvementPct >= 0 ? "+" : ""}${st.improvementPct.toFixed(0)}%`, unit: `${fmt(st.first7Avg ?? 0)} → ${fmt(st.latest7Avg ?? 0)} a day` };
+        return st.improvementPct === null ? "–" : `${st.improvementPct >= 0 ? "+" : ""}${st.improvementPct.toFixed(0)}%`;
+      default:
+        return null;
     }
   };
 
   // The league view is a roster, not a ranking, so it carries no movement arrows.
   const changeOf = (r: LeaderRow | undefined) => {
     if (!r || !ranked) return null;
-    if (metric === "total") return <Movement value={r.change} />;
+    if (metric === "points" || metric === "total") return <Movement value={r.change} />;
     if (metric === "week") return r.change === null ? null : <Movement value={r.change} />;
-    if (metric === "consistency") return r.change ? <span className="tnum text-xs font-semibold text-win">+{r.change} this week</span> : null;
+    if (metric === "consistency") return r.change ? <span className="tnum text-xs font-semibold text-win">+{r.change}</span> : null;
     return null;
   };
 
+  const rowsFor = (members: Member[], showTeam: boolean): PlayerRow[] =>
+    members.map((m) => {
+      const st = s.stats.get(m.id)!;
+      const team = teamById.get(m.teamId!)!;
+      const r = rowOf.get(m.id);
+      return {
+        userId: m.id,
+        name: nameOf(m.id),
+        color: team.color,
+        meta: [team.leadUserId === m.id ? "Captain" : null, showTeam ? team.name : null].filter(Boolean).join(" · "),
+        rank: r?.rank ?? null,
+        points: st.pointsContributed,
+        steps: st.totalSteps,
+        avg: st.avgSteps,
+        extra: extraOf(st),
+        change: changeOf(r),
+        honours: honoursFor(s.stepLeaders, m.id),
+      };
+    });
+
   // Everyone stays on the list. People the sort cannot place yet sit at the bottom.
-  const byMetric = (a: Member, b: Member) =>
-    (rowOf.get(a.id)?.rank ?? Infinity) - (rowOf.get(b.id)?.rank ?? Infinity) || a.name.localeCompare(b.name);
-  const order = (members: Member[]) => [...members].sort(ranked ? byMetric : (a, b) => a.name.localeCompare(b.name));
+  const order = (members: Member[]) =>
+    [...members].sort((a, b) => (rowOf.get(a.id)?.rank ?? Infinity) - (rowOf.get(b.id)?.rank ?? Infinity) || a.name.localeCompare(b.name));
 
   const teamTotal = (teamId: string) => {
     const stats = (s.membersByTeam.get(teamId) ?? []).map((m) => s.stats.get(m.id)!).filter(Boolean);
     switch (metric) {
+      case "points": {
+        const v = sum(stats.map((x) => x.pointsContributed));
+        return { value: v, label: "Team points", text: fmt(v) };
+      }
       case "total":
         return { value: sum(stats.map((x) => x.totalSteps)), label: "Team total", text: fmt(sum(stats.map((x) => x.totalSteps))) };
       case "week":
@@ -87,37 +119,10 @@ export default async function TeamsPage({ searchParams }: PageProps<"/teams">) {
     }
   };
 
-  const PersonRow = ({ userId, team, showTeam }: { userId: string; team: Team; showTeam: boolean }) => {
-    const r = rowOf.get(userId);
-    const v = valueOf(userId);
-    return (
-      <li className="flex items-center gap-3 px-4 py-2.5">
-        {ranked && (
-          <span className={`tnum w-7 shrink-0 text-center font-display text-xl font-bold ${r && r.rank <= 3 ? "text-accent-ink" : "text-muted"}`}>{r?.rank ?? "–"}</span>
-        )}
-        <Avatar name={nameOf(userId)} color={team.color} />
-        <span className="min-w-0 flex-1">
-          <Link href={`/players/${userId}`} className="block truncate font-semibold hover:underline">
-            {nameOf(userId)}
-          </Link>
-          <span className="block truncate text-xs text-muted">
-            {[team.leadUserId === userId ? "Captain" : null, showTeam ? team.name : null].filter(Boolean).join(" · ")}
-          </span>
-        </span>
-        <span className="shrink-0 text-right">
-          <span className="tnum block font-display text-lg font-bold leading-tight">{v.main}</span>
-          <span className="tnum block text-xs text-muted">{v.unit}</span>
-          {changeOf(r) && <span className="flex justify-end">{changeOf(r)}</span>}
-        </span>
-      </li>
-    );
-  };
-
   const teams = sort === "league"
     ? s.standings.map((r) => s.teams.find((t) => t.id === r.teamId)!)
     : [...s.teams].sort((a, b) => teamTotal(b.id).value - teamTotal(a.id).value);
   const everyone = order(s.participants);
-  const teamById = new Map(s.teams.map((t) => [t.id, t]));
 
   return (
     <>
@@ -151,7 +156,9 @@ export default async function TeamsPage({ searchParams }: PageProps<"/teams">) {
           ))}
         </div>
       </div>
-      <p className="mb-4 text-sm text-muted">{meta.note}</p>
+      <p className="mb-4 text-sm text-muted">
+        {meta.note} The three number columns stay the same whichever sort you pick.
+      </p>
 
       {metric === "improved" && board.length === 0 && (
         <div className="mb-4">
@@ -160,12 +167,8 @@ export default async function TeamsPage({ searchParams }: PageProps<"/teams">) {
       )}
 
       {view === "players" ? (
-        <Card>
-          <ol className="divide-y divide-line-2">
-            {everyone.map((m) => (
-              <PersonRow key={m.id} userId={m.id} team={teamById.get(m.teamId!)!} showTeam />
-            ))}
-          </ol>
+        <Card className="p-0 sm:p-1">
+          <PlayerTable caption="All players" ranked={ranked} extraLabel={extraLabel} changeLabel={changeLabel} rows={rowsFor(everyone, true)} />
         </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -196,11 +199,7 @@ export default async function TeamsPage({ searchParams }: PageProps<"/teams">) {
                 {members.length === 0 ? (
                   <p className="px-4 py-6 text-center text-sm text-muted">No members yet</p>
                 ) : (
-                  <ul className="divide-y divide-line-2">
-                    {members.map((m) => (
-                      <PersonRow key={m.id} userId={m.id} team={t} showTeam={false} />
-                    ))}
-                  </ul>
+                  <PlayerTable caption={`${t.name} members`} nameLabel="Member" ranked={ranked} rows={rowsFor(members, false)} />
                 )}
                 <Link href={`/teams/${t.slug}`} className="block border-t border-line-2 px-4 py-2.5 text-center text-sm font-semibold text-night-3 hover:bg-line-2">
                   Team page →

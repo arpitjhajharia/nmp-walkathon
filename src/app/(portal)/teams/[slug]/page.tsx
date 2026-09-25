@@ -1,11 +1,12 @@
 import { Award, Crown, Flag, Trophy } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FixtureCard } from "@/components/fixture-card";
+import { PlayerTable, honoursFor } from "@/components/player-table";
 import { TeamBadge, TeamIcon } from "@/components/team";
-import { Avatar, Card, Chip, EmptyState, FormGuide, SectionTitle, compact, fmt } from "@/components/ui";
+import { Card, EmptyState, FormGuide, SectionTitle, compact } from "@/components/ui";
 import { formatRange, weekdayShort } from "@/lib/engine/dates";
+import { byPlayerTotals } from "@/lib/engine/engine";
 import { getPortal } from "@/lib/server/season";
 
 export async function generateMetadata({ params }: PageProps<"/teams/[slug]">): Promise<Metadata> {
@@ -54,17 +55,22 @@ export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
   const contributions = everyone
     .map((id) => {
       const days = s.countedDates.filter((d) => s.teamOf(id, d) === team.id).map((d) => s.memberDay(id, d));
+      const recorded = days.filter((d) => !d.leave && d.steps !== null).length;
+      const steps = days.reduce((a, d) => a + (d.steps ?? 0), 0);
       return {
         id,
         name: nameOf(id),
         current: currentIds.has(id),
         activeDays: days.filter((d) => (d.steps ?? 0) >= s.activeSteps).length,
         points: days.reduce((a, d) => a + d.points, 0),
-        steps: days.reduce((a, d) => a + (d.steps ?? 0), 0),
+        steps,
+        // Averaged over days on this team only, so a mid-season move does not dent it.
+        avg: recorded ? steps / recorded : null,
       };
     })
     .filter((c) => c.current || c.points > 0 || c.steps > 0)
-    .sort((a, b) => Number(b.current) - Number(a.current) || a.name.localeCompare(b.name));
+    // Current squad first, then everyone in the usual player order.
+    .sort((a, b) => Number(b.current) - Number(a.current) || byPlayerTotals(a, b) || a.name.localeCompare(b.name));
 
   return (
     <>
@@ -126,38 +132,25 @@ export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
       </div>
 
       <section className="mt-10">
-        <SectionTitle title="Members" sub="Listed alphabetically. Totals count days spent on this team." />
-        <Card className="overflow-x-auto">
-          <table className="tnum w-full min-w-[480px] text-sm">
-            <caption className="sr-only">Member contributions</caption>
-            <thead>
-              <tr className="border-b border-line text-left text-xs font-semibold uppercase tracking-wider text-muted">
-                <th scope="col" className="px-4 py-2.5">Member</th>
-                <th scope="col" className="px-3 py-2.5 text-right">Days active</th>
-                <th scope="col" className="px-3 py-2.5 text-right">Points contributed</th>
-                <th scope="col" className="px-4 py-2.5 text-right">Total steps</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contributions.map((c) => (
-                <tr key={c.id} className="border-b border-line-2 last:border-0">
-                  <td className="px-4 py-2.5">
-                    <span className="flex items-center gap-2.5">
-                      <Avatar name={c.name} color={c.current ? team.color : undefined} />
-                      <Link href={`/players/${c.id}`} className={`font-semibold hover:underline ${c.current ? "" : "text-muted"}`}>
-                        {c.name}
-                      </Link>
-                      {team.leadUserId === c.id && <Chip>Captain</Chip>}
-                      {!c.current && <Chip>Former member</Chip>}
-                    </span>
-                  </td>
-                  <td className="px-3 text-right">{c.activeDays}</td>
-                  <td className="px-3 text-right font-semibold">{c.points}</td>
-                  <td className="px-4 text-right text-muted">{fmt(c.steps)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <SectionTitle title="Members" sub="Ordered by points, then steps, then the daily average. Totals count days spent on this team." />
+        <Card className="p-0 sm:p-1">
+          <PlayerTable
+            caption="Member contributions"
+            nameLabel="Member"
+            extraLabel="Days active"
+            rows={contributions.map((c) => ({
+              userId: c.id,
+              name: c.name,
+              color: c.current ? team.color : undefined,
+              meta: [team.leadUserId === c.id ? "Captain" : null, c.current ? null : "Former member"].filter(Boolean).join(" · "),
+              points: c.points,
+              steps: c.steps,
+              avg: c.avg,
+              extra: c.activeDays,
+              honours: honoursFor(s.stepLeaders, c.id),
+              faded: !c.current,
+            }))}
+          />
         </Card>
       </section>
 

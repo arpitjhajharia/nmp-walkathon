@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { addDays, mondayOf, weekday } from "./dates.ts";
 import { DEFAULT_SETTINGS } from "./defaults.ts";
 import { buildDemoData } from "./demo.ts";
-import { activeThreshold, computeSeason, generateFixtures, maxDailyPoints, nextBand, pointsFor, todayInsight, weeklyRecap } from "./engine.ts";
+import { activeThreshold, byPlayerTotals, computeSeason, generateFixtures, maxDailyPoints, nextBand, pointsFor, todayInsight, weeklyRecap } from "./engine.ts";
 import type { Entry, Leave, Member, Snapshot } from "./types.ts";
 
 const bands = DEFAULT_SETTINGS.bands;
@@ -134,6 +134,56 @@ test("scores stop at yesterday, and so do possible points", () => {
   const a = f.home.teamId === "a" ? f.home : f.away;
   assert.equal(a.points, 5);
   assert.equal(a.possible, 50, "two counted days, five members, five points each");
+});
+
+test("players rank on points, then steps, then the daily average", () => {
+  const [d1, d2] = ["2026-08-03", "2026-08-04"];
+  const s = computeSeason(
+    miniSnapshot([
+      // a1: two 12k days → 10 points. b1: one 12k day and one 20k day → 10 points, more steps.
+      { userId: "a1", date: d1, steps: 12000 },
+      { userId: "a1", date: d2, steps: 12000 },
+      { userId: "b1", date: d1, steps: 12000 },
+      { userId: "b1", date: d2, steps: 20000 },
+      // c1 out-walks everyone but does it in a single day, so it is worth fewer points.
+      { userId: "c1", date: d2, steps: 40000 },
+    ]),
+    "2026-08-05",
+  );
+  const rank = new Map(s.leaderboards.points.map((r) => [r.userId, r.rank]));
+  assert.equal(rank.get("b1"), 1, "level on points, ahead on steps");
+  assert.equal(rank.get("a1"), 2);
+  assert.equal(rank.get("c1"), 3, "40,000 steps in one day still only earns five points");
+  assert.ok(s.leaderboards.total.find((r) => r.userId === "c1")!.rank === 1, "the steps board is unchanged");
+});
+
+test("the daily average is the last word on a tie", () => {
+  const busy = { points: 10, steps: 20000, avg: 4000 };
+  const brisk = { points: 10, steps: 20000, avg: 10000 };
+  assert.ok(byPlayerTotals(brisk, busy) < 0, "same points and steps in fewer days ranks higher");
+  assert.equal(byPlayerTotals(busy, { ...busy }), 0, "nothing left to separate them");
+  assert.ok(byPlayerTotals({ points: 9, steps: 99999, avg: 99999 }, busy) > 0, "points come first");
+});
+
+test("step leaders name yesterday's best and the season's best, ties included", () => {
+  const [d1, d2] = ["2026-08-03", "2026-08-04"];
+  const s = computeSeason(
+    miniSnapshot([
+      { userId: "a1", date: d1, steps: 20000 },
+      { userId: "a1", date: d2, steps: 1000 },
+      { userId: "b1", date: d2, steps: 9000 },
+      { userId: "c1", date: d2, steps: 9000 },
+      { userId: "d1", date: d2, steps: 3000 },
+    ]),
+    "2026-08-05",
+  );
+  assert.deepEqual(s.stepLeaders.total, ["a1"], "21,000 beats every other total");
+  assert.deepEqual(s.stepLeaders.yesterday.sort(), ["b1", "c1"], "a tie on the last counted day is shared");
+});
+
+test("nobody holds a step honour before the first steps land", () => {
+  const s = computeSeason(miniSnapshot([]), "2026-08-05");
+  assert.deepEqual(s.stepLeaders, { yesterday: [], total: [] });
 });
 
 test("day one has nothing to score yet", () => {

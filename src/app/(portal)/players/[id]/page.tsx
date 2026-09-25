@@ -1,6 +1,7 @@
 import { Award, Flame, Target } from "lucide-react";
 import type { Metadata } from "next";
 import { BADGE_ICONS } from "@/components/badges";
+import { HonourBadge, honoursFor } from "@/components/player-table";
 import { TeamBadge } from "@/components/team";
 import { Card, Chip, EmptyState, PageHeader, Pips, Progress, SectionTitle, Stat, fmt } from "@/components/ui";
 import { formatDay, formatShort } from "@/lib/engine/dates";
@@ -57,7 +58,12 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
   return (
     <>
       <PageHeader eyebrow="Player" title={person.name}>
-        <TeamBadge team={team} size="sm" link />
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <TeamBadge team={team} size="sm" link />
+          {honoursFor(s.stepLeaders, id).map((h) => (
+            <HonourBadge key={h} kind={h} />
+          ))}
+        </span>
       </PageHeader>
 
       <div className="grid gap-4 lg:grid-cols-3">
