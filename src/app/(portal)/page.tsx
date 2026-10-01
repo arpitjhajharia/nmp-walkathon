@@ -4,7 +4,7 @@ import { FixtureCard } from "@/components/fixture-card";
 import { CountUp } from "@/components/motion";
 import { StandingsTable } from "@/components/standings-table";
 import { TeamBadge, TeamIcon } from "@/components/team";
-import { PlayerTable, honoursFor } from "@/components/player-table";
+import { PlayerTable, accoladesFor } from "@/components/player-table";
 import { Card, Chip, EmptyState, Movement, Progress, SectionTitle, compact, fmt, joinNames } from "@/components/ui";
 import { diffDays, formatDay, formatRange, formatShort } from "@/lib/engine/dates";
 import { BADGES, todayInsight } from "@/lib/engine/engine";
@@ -215,6 +215,8 @@ export default async function HomePage() {
                 <PlayerTable
                   caption="Top walkers by team points"
                   ranked
+                  awards
+                  streak
                   changeLabel="Move"
                   rows={topWalkers.map((r) => {
                     const st = s.stats.get(r.userId)!;
@@ -223,18 +225,19 @@ export default async function HomePage() {
                       userId: r.userId,
                       name: nameOf(r.userId),
                       color: team?.color,
-                      meta: [team?.name, st.currentStreak >= 3 ? `${st.currentStreak}-day streak` : null].filter(Boolean).join(" · "),
                       rank: r.rank,
                       points: st.pointsContributed,
                       steps: st.totalSteps,
                       avg: st.avgSteps,
+                      streak: st.currentStreak,
+                      awards: accoladesFor(s, r.userId),
                       change: r.change === null ? null : <Movement value={r.change} />,
-                      honours: honoursFor(s.stepLeaders, r.userId),
                     };
                   })}
                 />
                 <p className="border-t border-line-2 px-4 py-2.5 text-xs text-muted">
-                  Ranked by team points, then steps, then the daily average. Pts are what each person contributed to their team, and the average counts only days with an entry.
+                  Ranked by team points, then steps, then the daily average. Pts are what each person contributed to their team. The circle colour is the team, and
+                  awards are the honours, weekly awards and badges each person holds — hover one for its name.
                   {lastWeek && " Move shows the change since last Sunday."}
                 </p>
               </Card>

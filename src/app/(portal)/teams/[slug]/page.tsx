@@ -2,7 +2,7 @@ import { Award, Crown, Flag, Trophy } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { FixtureCard } from "@/components/fixture-card";
-import { PlayerTable, honoursFor } from "@/components/player-table";
+import { PlayerTable, accoladesFor } from "@/components/player-table";
 import { TeamBadge, TeamIcon } from "@/components/team";
 import { Card, EmptyState, FormGuide, SectionTitle, compact } from "@/components/ui";
 import { formatRange, weekdayShort } from "@/lib/engine/dates";
@@ -137,6 +137,8 @@ export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
           <PlayerTable
             caption="Member contributions"
             nameLabel="Member"
+            awards
+            streak
             extraLabel="Days active"
             rows={contributions.map((c) => ({
               userId: c.id,
@@ -147,7 +149,8 @@ export default async function TeamPage({ params }: PageProps<"/teams/[slug]">) {
               steps: c.steps,
               avg: c.avg,
               extra: c.activeDays,
-              honours: honoursFor(s.stepLeaders, c.id),
+              streak: s.stats.get(c.id)?.currentStreak ?? null,
+              awards: accoladesFor(s, c.id),
               faded: !c.current,
             }))}
           />

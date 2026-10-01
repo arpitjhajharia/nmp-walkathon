@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Tabs } from "@/components/tabs";
 import { TeamIcon } from "@/components/team";
-import { PlayerTable, honoursFor, type PlayerRow } from "@/components/player-table";
+import { PlayerTable, accoladesFor, type PlayerRow } from "@/components/player-table";
 import { Card, FormGuide, Movement, Notice, PageHeader, fmt } from "@/components/ui";
 import type { LeaderRow, MemberStats } from "@/lib/engine/engine";
 import type { Member } from "@/lib/engine/types";
@@ -88,7 +88,8 @@ export default async function TeamsPage({ searchParams }: PageProps<"/teams">) {
         avg: st.avgSteps,
         extra: extraOf(st),
         change: changeOf(r),
-        honours: honoursFor(s.stepLeaders, m.id),
+        streak: st.currentStreak,
+        awards: accoladesFor(s, m.id),
       };
     });
 
@@ -168,7 +169,7 @@ export default async function TeamsPage({ searchParams }: PageProps<"/teams">) {
 
       {view === "players" ? (
         <Card className="p-0 sm:p-1">
-          <PlayerTable caption="All players" ranked={ranked} extraLabel={extraLabel} changeLabel={changeLabel} rows={rowsFor(everyone, true)} />
+          <PlayerTable caption="All players" ranked={ranked} awards streak extraLabel={extraLabel} changeLabel={changeLabel} rows={rowsFor(everyone, true)} />
         </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -199,7 +200,7 @@ export default async function TeamsPage({ searchParams }: PageProps<"/teams">) {
                 {members.length === 0 ? (
                   <p className="px-4 py-6 text-center text-sm text-muted">No members yet</p>
                 ) : (
-                  <PlayerTable caption={`${t.name} members`} nameLabel="Member" ranked={ranked} rows={rowsFor(members, false)} />
+                  <PlayerTable caption={`${t.name} members`} nameLabel="Member" ranked={ranked} awards rows={rowsFor(members, false)} />
                 )}
                 <Link href={`/teams/${t.slug}`} className="block border-t border-line-2 px-4 py-2.5 text-center text-sm font-semibold text-night-3 hover:bg-line-2">
                   Team page →

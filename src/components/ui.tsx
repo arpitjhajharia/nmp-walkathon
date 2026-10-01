@@ -171,6 +171,13 @@ export function Avatar({ name, color }: { name: string; color?: string }) {
   );
 }
 
+/** "Hirday Kumar" → "Hirday K.": enough to tell people apart without stretching a table. */
+export function shortName(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name;
+  return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
+}
+
 export function fmt(n: number): string {
   return Math.round(n).toLocaleString("en-US");
 }
